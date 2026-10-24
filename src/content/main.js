@@ -1,4 +1,385 @@
-// Content-script entry point. In milestone M0 this only proves the module graph
-// loads; matching, container resolution and overlays arrive in later rounds.
+// Content-script entry point (design 5.1a, 5.3, 5.3a). Runs at document_start.
+// Scans with a TreeWalker over text and the title/aria-label/alt attributes,
+// then a throttled, budgeted MutationObserver processes only changed subtrees.
+// Processed nodes are cached by node + text hash so recycled feed nodes are
+// re-checked. Our own injected nodes are ignored to avoid recursive matching.
 
-console.log("[blackout] loaded");
+import { loadState, onStateChanged } from "../shared/storage.js";
+import { compileMatcher } from "./matcher.js";
+import { findContainer } from "./container.js";
+import { makeCandidateWalker, isSkippable } from "./scan.js";
+import { reverify } from "./durability.js";
+import * as overlay from "./overlay.js";
+
+const DEBUG = false;
+
+const win = window;
+const doc = document;
+
+/** Attributes that carry matchable text (design 5.1). */
+const ATTRS = ["title", "aria-label", "alt"];
+
+/** Batch no more often than this, and never run longer than the cap (5.3). */
+const MIN_INTERVAL_MS = 100;
+const MAX_BATCH_MS = 50;
+
+/** @type {import("./matcher.js").Matcher|null} */
+let matcher = null;
+let paused = false;
+
+/**
+ * node -> {hash, container}: the text last processed for it and the container
+ * that mask produced (or null). Cache validity is node + text hash + mask still
+ * present, so a node whose mask was stripped is re-evaluated (design 5.3a).
+ * @type {WeakMap<Node, {hash: number, container: Element|null}>}
+ */
+let processed = new WeakMap();
+
+/** Containers we have blacked out, for teardown and re-verification. */
+const activeContainers = new Set();
+
+/** Masked containers to re-verify (deduped), and the queue draining them. */
+let reverifyQueue = [];
+let reverifyPending = new WeakSet();
+
+/** Roots waiting to be scanned, and the walker currently being drained. */
+let pending = [];
+let active = null;
+
+const perfNow = () =>
+  win.performance && win.performance.now ? win.performance.now() : Date.now();
+
+/**
+ * Log one decision line, prefixed, only when DEBUG is on (the build flips this
+ * to true for `npm run build -- --debug`; src stays false).
+ * @param {...unknown} args
+ */
+function log(...args) {
+  if (DEBUG) console.log("[blackout]", ...args);
+}
+
+/** @param {string} text @returns {string} first 60 chars, whitespace collapsed */
+function snippet(text) {
+  return text.replace(/\s+/g, " ").trim().slice(0, 60);
+}
+
+/** @param {Element|null} el */
+function roleOf(el) {
+  return (el && el.getAttribute && el.getAttribute("role")) || "";
+}
+
+/** @param {Element|null} el @returns {string} "WxH" from the layout box */
+function sizeOf(el) {
+  if (!el || typeof el.getBoundingClientRect !== "function") return "0x0";
+  const r = el.getBoundingClientRect();
+  return `${Math.round(r.width)}x${Math.round(r.height)}`;
+}
+
+/** Counters for the current scan, reported when the queue drains. */
+let examinedText = 0;
+let examinedAttrs = 0;
+
+/** Elements already logged as a refusal, so identical refusals log once. */
+let refusalLogged = new WeakSet();
+
+/** @param {import("./container.js").ContainerDecision} decision */
+function logRefused(decision) {
+  if (!DEBUG) return;
+  const el = decision.element;
+  if (el) {
+    if (refusalLogged.has(el)) return;
+    refusalLogged.add(el);
+  }
+  log(
+    `container refused reason=${decision.reason} tag=${el ? el.tagName : ""} role="${roleOf(el)}" size=${sizeOf(el)}`,
+  );
+}
+
+/**
+ * True if node is (or lives inside) one of our injected elements.
+ * @param {Node|null} node
+ */
+function isOwnNode(node) {
+  let el = node && node.nodeType === 3 ? node.parentNode : node;
+  while (el && el.nodeType === 1) {
+    if (el.id === "blackout-stylesheet") return true;
+    if (el.classList && el.classList.contains("blackout-ui")) return true;
+    el = el.parentElement;
+  }
+  return false;
+}
+
+/**
+ * @param {string} s
+ * @returns {number} 32-bit FNV-1a hash
+ */
+function hashText(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function makeWalker(root) {
+  return { walker: makeCandidateWalker(doc, root, isOwnNode), root, rootDone: false };
+}
+
+/**
+ * Observes each masked container for class changes and direct child removal, so
+ * if the page strips our class or injected child we re-verify and re-apply.
+ * Uses intactness (not mutation filtering) to ignore our own writes.
+ */
+const maskObserver = new MutationObserver((mutations) => {
+  for (const m of mutations) {
+    if (activeContainers.has(m.target)) enqueueReverify(/** @type {Element} */ (m.target));
+  }
+  scheduleFlush();
+});
+
+/** @param {Element} container */
+function enqueueReverify(container) {
+  if (reverifyPending.has(container)) return;
+  reverifyPending.add(container);
+  reverifyQueue.push(container);
+}
+
+/** The nearest ancestor-or-self that is a masked container, or null. */
+function maskedAncestor(node) {
+  let el = node && node.nodeType === 3 ? node.parentElement : node;
+  while (el && el.nodeType === 1) {
+    if (activeContainers.has(el)) return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+
+/**
+ * Test one piece of candidate text and, on a hit, black out its container.
+ * @param {Node} cacheKey
+ * @param {Element|null} element
+ * @param {string} text
+ */
+function handleCandidate(cacheKey, element, text) {
+  if (!element) return;
+  const h = hashText(text);
+  const prev = processed.get(cacheKey);
+  // Skip only if unchanged AND any mask it produced is still intact (5.3a).
+  if (prev && prev.hash === h && (!prev.container || overlay.isIntact(prev.container))) return;
+
+  if (paused || !matcher || matcher.isEmpty) {
+    processed.set(cacheKey, { hash: h, container: null });
+    return;
+  }
+  if (!matcher.test(text)) {
+    processed.set(cacheKey, { hash: h, container: null });
+    return;
+  }
+  const hit = matcher.match(text, Date.now());
+  if (!hit) {
+    processed.set(cacheKey, { hash: h, container: null });
+    return;
+  }
+
+  const decision = findContainer(element, win);
+  const container = decision.container;
+
+  if (!container || isOwnNode(container)) {
+    processed.set(cacheKey, { hash: h, container: null });
+    if (!container) {
+      log(`match profile="${hit.profileName}" term="${hit.term}" text="${snippet(text)}"`);
+      logRefused(decision); // no safe element at all (design 8b)
+    }
+    return;
+  }
+
+  // Mask each container once: text, aria-label and title matches in the same
+  // card resolve here and must produce a single mask and a single log line. A
+  // match whose container is already masked and intact just refreshes the cache.
+  const firstTime = !activeContainers.has(container);
+  if (!firstTime && overlay.isIntact(container)) {
+    processed.set(cacheKey, { hash: h, container });
+    return;
+  }
+
+  log(`match profile="${hit.profileName}" term="${hit.term}" text="${snippet(text)}"`);
+  overlay.blackout(container, hit.profileName, { window: win });
+  overlay.reapply(container); // if a record existed but the page stripped it
+  if (firstTime) {
+    activeContainers.add(container);
+    maskObserver.observe(container, { attributes: true, attributeFilter: ["class"], childList: true });
+  }
+  processed.set(cacheKey, { hash: h, container });
+  log(`container masked tag=${container.tagName} role="${roleOf(container)}" size=${sizeOf(container)}`);
+}
+
+/**
+ * @param {Node} node
+ */
+function processNode(node) {
+  const type = node.nodeType;
+  if (type === 3) {
+    const parent = node.parentElement;
+    if (parent && isSkippable(parent, isOwnNode)) return; // e.g. text in <script>
+    const text = node.nodeValue || "";
+    if (text.trim()) {
+      examinedText++;
+      handleCandidate(node, parent, text);
+    }
+  } else if (type === 1) {
+    if (isSkippable(node, isOwnNode)) return;
+    const parts = [];
+    for (const name of ATTRS) {
+      const value = node.getAttribute(name);
+      if (value) parts.push(value);
+    }
+    if (parts.length) {
+      examinedAttrs += parts.length;
+      handleCandidate(node, node, parts.join(" "));
+    }
+  }
+}
+
+/**
+ * Drain the scan queue within the time budget; leftover work stays queued and
+ * is picked up on the next flush (never dropped, design 5.3).
+ * @returns {boolean} whether work remains
+ */
+function drain() {
+  const start = perfNow();
+
+  // Re-verify masked containers first: cheap, and keeps masks stuck as the feed
+  // re-renders. Leftover carries to the next batch like scan work.
+  while (reverifyQueue.length && perfNow() - start < MAX_BATCH_MS) {
+    const container = reverifyQueue.shift();
+    reverifyPending.delete(container);
+    if (activeContainers.has(container)) reverify(container, matcher, win, activeContainers);
+  }
+
+  while (perfNow() - start < MAX_BATCH_MS) {
+    if (!active) {
+      let root = null;
+      while (pending.length) {
+        const candidate = pending.shift();
+        if (candidate && candidate.isConnected && !isOwnNode(candidate)) {
+          root = candidate;
+          break;
+        }
+      }
+      if (!root) return false;
+      active = makeWalker(root);
+    }
+    if (!active.rootDone) {
+      active.rootDone = true;
+      processNode(active.root);
+      continue;
+    }
+    const node = active.walker.nextNode();
+    if (!node) {
+      active = null;
+      continue;
+    }
+    processNode(node);
+  }
+  return pending.length > 0 || active != null || reverifyQueue.length > 0;
+}
+
+let flushTimer = null;
+let lastFlushAt = 0;
+
+function scheduleFlush() {
+  if (flushTimer != null) return;
+  const since = perfNow() - lastFlushAt;
+  const wait = since >= MIN_INTERVAL_MS ? 0 : MIN_INTERVAL_MS - since;
+  flushTimer = win.setTimeout(() => {
+    flushTimer = null;
+    lastFlushAt = perfNow();
+    if (drain()) scheduleFlush();
+    else log(`scan examined textNodes=${examinedText} attrs=${examinedAttrs}`);
+  }, wait);
+}
+
+/**
+ * @param {Node} node
+ */
+function enqueue(node) {
+  if (!node || isOwnNode(node)) return;
+  pending.push(node);
+}
+
+function teardownAll() {
+  for (const container of activeContainers) overlay.cleanup(container);
+  activeContainers.clear();
+  maskObserver.disconnect();
+  reverifyQueue = [];
+  reverifyPending = new WeakSet();
+}
+
+const observer = new MutationObserver((mutations) => {
+  for (const m of mutations) {
+    if (m.type === "childList") {
+      for (const node of m.addedNodes) enqueue(node);
+    } else if (m.type === "characterData") {
+      enqueue(m.target);
+    } else if (m.type === "attributes") {
+      enqueue(m.target);
+    }
+    // Content recycled inside a masked card: re-verify it (new story may no
+    // longer match, so the mask must be removed; design 5.3a).
+    const masked = maskedAncestor(m.target);
+    if (masked) enqueueReverify(masked);
+  }
+  scheduleFlush();
+});
+
+function startObserver() {
+  observer.observe(doc.documentElement, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributes: true,
+    // Only the matchable attributes: class/style changes we make ourselves are
+    // deliberately not observed, so we never react to our own writes.
+    attributeFilter: ATTRS,
+  });
+}
+
+function scanAll() {
+  if (paused || !matcher || matcher.isEmpty) return;
+  log("scan start");
+  examinedText = 0;
+  examinedAttrs = 0;
+  enqueue(doc.body || doc.documentElement);
+  scheduleFlush();
+}
+
+async function reevaluate() {
+  const state = await loadState();
+  paused = !state.preferences.globalEnabled;
+  matcher = compileMatcher(state.profiles);
+  teardownAll();
+  processed = new WeakMap();
+  refusalLogged = new WeakSet();
+  scanAll();
+}
+
+async function init() {
+  const state = await loadState();
+  log(
+    `profiles loaded: ${state.profiles.length}${state.seeded ? " (seeded starter profile)" : ""}`,
+  );
+  paused = !state.preferences.globalEnabled;
+  matcher = compileMatcher(state.profiles);
+
+  startObserver();
+  onStateChanged(reevaluate);
+
+  if (doc.readyState === "loading") {
+    doc.addEventListener("DOMContentLoaded", scanAll, { once: true });
+  } else {
+    scanAll();
+  }
+}
+
+init();

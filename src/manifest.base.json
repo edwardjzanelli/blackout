@@ -32,20 +32,5 @@
     "32": "icons/icon32.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
-  },
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "content/main.js",
-        "content/matcher.js",
-        "content/container.js",
-        "content/overlay.js",
-        "shared/browser.js",
-        "shared/storage.js",
-        "adapters/*.js"
-      ],
-      "matches": ["<all_urls>"],
-      "use_dynamic_url": true
-    }
-  ]
+  }
 }

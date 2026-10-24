@@ -3,13 +3,78 @@
 // stubbed as manifest transforms so they can be added without restructuring.
 
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const srcDir = join(root, "src");
 const iconsDir = join(root, "icons");
 const distDir = join(root, "dist");
+
+/** The module dynamic-imported by the content-script loader (design 6a). */
+const CONTENT_ENTRY = "content/main.js";
+
+/** `npm run build -- --debug` turns on content-script decision logging. */
+const DEBUG_BUILD = process.argv.includes("--debug");
+
+/** Strip comments so JSDoc `import("...")` type refs are not read as imports. */
+function stripComments(code) {
+  return code
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+}
+
+/**
+ * Relative module specifiers used by a module: static import/export ... from,
+ * bare side-effect imports, and dynamic import().
+ * @param {string} code
+ * @returns {string[]}
+ */
+function relativeSpecifiers(code) {
+  const src = stripComments(code);
+  const specs = new Set();
+  const patterns = [
+    /\b(?:import|export)\b[^;'"]*?\bfrom\s*["']([^"']+)["']/g,
+    /\bimport\s*["']([^"']+)["']/g,
+    /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g,
+  ];
+  for (const re of patterns) {
+    let m;
+    while ((m = re.exec(src)) !== null) {
+      if (m[1].startsWith("./") || m[1].startsWith("../")) specs.add(m[1]);
+    }
+  }
+  return [...specs];
+}
+
+/**
+ * Walk the static import graph from an entry module and return every reachable
+ * module as a forward-slashed path relative to srcDir. Every web-accessible
+ * module must be listed, so this is the source of truth for
+ * web_accessible_resources: a newly imported module is picked up automatically.
+ * Throws if a specifier cannot be resolved to a file.
+ * @param {string} entryRel
+ * @returns {Promise<string[]>}
+ */
+async function importGraph(entryRel) {
+  const seen = new Set();
+  const queue = [entryRel];
+  while (queue.length) {
+    const rel = queue.shift();
+    if (seen.has(rel)) continue;
+    seen.add(rel);
+    let code;
+    try {
+      code = await readFile(join(srcDir, rel), "utf8");
+    } catch {
+      throw new Error(`import graph: ${rel} is imported but does not exist in src/`);
+    }
+    for (const spec of relativeSpecifiers(code)) {
+      queue.push(posix.normalize(posix.join(posix.dirname(rel), spec)));
+    }
+  }
+  return [...seen].sort();
+}
 
 /**
  * A browser target is a transform from the base manifest to its per-browser
@@ -53,12 +118,32 @@ async function buildTarget(name, transform) {
     await readFile(join(srcDir, "manifest.base.json"), "utf8"),
   );
   const manifest = transform(structuredClone(base));
+
+  // Generate web_accessible_resources from the actual import graph so it can
+  // never drift out of sync with the code. use_dynamic_url must be false:
+  // true serves each module under a distinct, per-fetch URL, which blocks the
+  // relative static imports between these modules (the M1 load failure).
+  manifest.web_accessible_resources = [
+    {
+      resources: await importGraph(CONTENT_ENTRY),
+      matches: ["<all_urls>"],
+      use_dynamic_url: false,
+    },
+  ];
+
   await writeFile(
     join(out, "manifest.json"),
     JSON.stringify(manifest, null, 2) + "\n",
   );
 
-  console.log(`built dist/${name}`);
+  // Flip the debug flag in the built copy only; src stays DEBUG = false.
+  if (DEBUG_BUILD) {
+    const mainPath = join(out, CONTENT_ENTRY);
+    const code = await readFile(mainPath, "utf8");
+    await writeFile(mainPath, code.replace("const DEBUG = false;", "const DEBUG = true;"));
+  }
+
+  console.log(`built dist/${name}${DEBUG_BUILD ? " (debug)" : ""}`);
 }
 
 for (const name of ACTIVE_TARGETS) {

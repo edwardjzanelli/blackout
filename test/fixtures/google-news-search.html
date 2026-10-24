@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Kardashian - Google News</title>
+  </head>
+  <body>
+    <!-- Trimmed from a real news.google.com/search page. Preserves the real
+         <main> -> feed-wrapper -> card nesting and obfuscated class names;
+         scripts, styles, images and all account/identifying markup removed.
+         Structures that failed in the live run:
+          - a feed of same-signature result cards (<c-wiz class="PO9Zff ...">):
+            masking one changed its class and hid its still-unmasked siblings
+            from the repeated-item rule, so later cards were left visible;
+          - sidebar entries with no card at all (a topic heading link, a
+            "Follow this topic" button, a standalone topic chip): refused and
+            left visible.
+         Group 1 is five matching cards (reproduces the cascade); group 2 is a
+         non-matching feed (must stay untouched); the sidebar holds the no-card
+         matches. -->
+    <main class="IKXQhd">
+      <div class="UW0SDc">
+        <c-wiz class="D9SJMe">
+          <div class="PyrB4 T4Nnue">Top stories</div>
+          <c-wiz id="card-1" class="PO9Zff Ccj79 kUVvS">
+            <c-wiz class="XBspb"><div class="IFHyqb DeXSAc"><div class="B6pJDd"><div class="IL9Cne">
+              <a class="JtKRv" href="./read/1" title="Kim Kardashian authorized biography"
+                >Kim Kardashian Read Every Word of Her Authorized Biography</a>
+            </div></div></div></c-wiz>
+          </c-wiz>
+          <c-wiz id="card-2" class="PO9Zff Ccj79 kUVvS">
+            <c-wiz class="XBspb"><div class="IFHyqb DeXSAc"><div class="B6pJDd"><div class="IL9Cne">
+              <a class="JtKRv" href="./read/2">Kris Jenner flips out over decades-old affair</a>
+            </div></div></div></c-wiz>
+          </c-wiz>
+          <c-wiz id="card-3" class="PO9Zff Ccj79 kUVvS">
+            <c-wiz class="XBspb"><div class="IFHyqb DeXSAc"><div class="B6pJDd"><div class="IL9Cne">
+              <a class="JtKRv" href="./read/3">Kourtney Kardashian reveals dating advice</a>
+            </div></div></div></c-wiz>
+          </c-wiz>
+          <c-wiz id="card-4" class="PO9Zff Ccj79 kUVvS">
+            <c-wiz class="XBspb"><div class="IFHyqb DeXSAc"><div class="B6pJDd"><div class="IL9Cne">
+              <a class="JtKRv" href="./read/4">Khloé Kardashian spotted in Los Angeles</a>
+            </div></div></div></c-wiz>
+          </c-wiz>
+          <c-wiz id="card-5" class="PO9Zff Ccj79 kUVvS">
+            <c-wiz class="XBspb"><div class="IFHyqb DeXSAc"><div class="B6pJDd"><div class="IL9Cne">
+              <a class="JtKRv" href="./read/5">Kylie Jenner launches a new line</a>
+            </div></div></div></c-wiz>
+          </c-wiz>
+        </c-wiz>
+      </div>
+
+      <div class="UW0SDc">
+        <c-wiz class="D9SJMe">
+          <c-wiz id="nm-1" class="PO9Zff Ccj79 kUVvS">
+            <c-wiz class="XBspb"><div class="IFHyqb DeXSAc"><div class="B6pJDd"><div class="IL9Cne">
+              <a class="JtKRv" href="./read/n1">Local weather: sunny skies all week</a>
+            </div></div></div></c-wiz>
+          </c-wiz>
+          <c-wiz id="nm-2" class="PO9Zff Ccj79 kUVvS">
+            <c-wiz class="XBspb"><div class="IFHyqb DeXSAc"><div class="B6pJDd"><div class="IL9Cne">
+              <a class="JtKRv" href="./read/n2">City council approves transit budget</a>
+            </div></div></div></c-wiz>
+          </c-wiz>
+          <c-wiz id="nm-3" class="PO9Zff Ccj79 kUVvS">
+            <c-wiz class="XBspb"><div class="IFHyqb DeXSAc"><div class="B6pJDd"><div class="IL9Cne">
+              <a class="JtKRv" href="./read/n3">Downtown farmers market returns Saturday</a>
+            </div></div></div></c-wiz>
+          </c-wiz>
+        </c-wiz>
+      </div>
+
+      <aside class="BYTDRe">
+        <div class="bfSRxb">
+          <a id="topic-title" class="PLp46c" href="#">Kim Kardashian</a>
+          <button id="follow" aria-label="Follow this topic - Kim Kardashian">Follow</button>
+          <div class="relatedwrap">
+            <a id="chip" class="WpHeLc" href="#">Keeping Up with the Kardashians</a>
+            <a id="chip-other" class="WpHeLc" href="#">Technology news</a>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </body>
+</html>

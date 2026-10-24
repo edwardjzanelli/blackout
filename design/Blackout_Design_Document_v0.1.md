@@ -198,7 +198,7 @@ Special cases: small inline mentions should use text-range masking rather than a
 
 The injected child lives in a shadow root so the site's CSS cannot restyle the label. One caveat: the container may need `position: relative` for the label, which can affect absolutely positioned descendants on some sites; the adapter can opt out per site.
 
-**8b. [ADDED]** Inline text-range masking (§13, last question) is P1. For v0.1 a match with no safe container is skipped and counted, not masked.
+**8b. [ADDED] [CHANGED]** Inline text-range masking (§13, last question) is P1. ~~For v0.1 a match with no safe container is skipped and counted, not masked.~~ **A matched word is never left visible. Where no safe card container exists (topic chips, "Follow this topic" links, section headings, sidebar entries), mask the smallest element that contains the match, its own link, chip, heading or span, using the same §8a mechanism. The size, inputs and forbidden-boundary rules still apply to that element, so never `<main>`, `<body>`, feeds or nav containers themselves; a link or chip inside nav is fine.**
 
 # 9. Security, privacy, and accessibility
 

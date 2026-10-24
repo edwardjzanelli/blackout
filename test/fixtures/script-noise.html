@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Script noise</title>
+  </head>
+  <body>
+    <!-- The term appears in non-visible places (JSON-LD, inline script, CSS)
+         as well as in one real visible card. Only the card must be scanned. -->
+    <script type="application/ld+json">
+      { "@type": "ItemList", "name": "Kardashian search results" }
+    </script>
+    <script>
+      var pageData = { searchTerm: "Kardashian", page: 1 };
+    </script>
+    <style>
+      .promo::after { content: "Kardashian"; }
+    </style>
+    <main>
+      <article id="real">
+        <h3>Kim Kardashian spotted downtown</h3>
+        <p>Photos inside.</p>
+      </article>
+    </main>
+  </body>
+</html>
