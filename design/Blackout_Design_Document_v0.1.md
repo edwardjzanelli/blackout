@@ -50,7 +50,10 @@ Initial use cases: suppress Kardashian-related articles; avoid coverage of selec
 
 ## 3.2 Settings dashboard
 
-- Filters: name, terms, enabled status, matching mode, blackout behavior, expiration, edit/delete.
+- ~~Filters: name, terms, enabled status, matching mode, blackout behavior, expiration, edit/delete.~~ **[CHANGED] Filters are one multiline box, "Block these", one term per line. Each non-blank line is one filter whose single include term is the line as typed (trimmed); duplicate lines are removed case-insensitively, keeping the first spelling. Save applies the box (no autosave); a temporary filter is a line you delete when done. Names, exclusions, site scope and expiry are not in the v0.1 UI (the data-model fields stay, unused).**
+
+**3.2a [ADDED]** A history of removed terms is planned for later; not in v0.1.
+
 - History: timestamp, site domain, matched profile, action (blocked/revealed), optionally page title; searchable and clearable. **[CHANGED] P1, not in the Friday build.**
 - Statistics: total blocked, counts by profile/site, time window. **[CHANGED] Friday build: total and per-profile counts only.**
 - Preferences: overlay style, reveal policy, history retention, site allowlist, global pause.
@@ -63,7 +66,7 @@ Default presentation: an opaque, accessible overlay occupying the content unit's
 
 ## 3.4 Temporary spoiler filters
 
-A user creates "Survivor spoilers," enters phrases such as Survivor, tribal council, and voted off, then sets an expiration time. The profile automatically stops matching after expiration. Because generic phrases may cause false positives, the interface warns about broad terms and supports site-specific scope and phrase matching.
+~~A user creates "Survivor spoilers," enters phrases such as Survivor, tribal council, and voted off, then sets an expiration time. The profile automatically stops matching after expiration.~~ **[CHANGED]** Because generic phrases may cause false positives, the interface warns about broad terms. **In v0.1 a temporary filter is just a line in the "Block these" box: the user adds a term while avoiding the topic and deletes that line (and Saves) when done. There is no expiry picker in the UI; the broad-term warning (§5.2a) still applies.**
 
 ## 3.5 [ADDED] First run and permissions
 
@@ -85,7 +88,7 @@ Both thresholds (half, 6) are preferences, so they can be tuned later. **[ADDED]
 | FR-04 | Overlay a bounded content unit and preserve layout    | P0       |
 | FR-05 | Click or keyboard reveal and re-blackout              | P0       |
 | FR-06 | Handle newly loaded content via MutationObserver      | P0       |
-| FR-07 | Profile expiration date/time                          | P0       |
+| FR-07 | Profile expiration date/time                          | ~~P0~~ **Later [CHANGED]** |
 | FR-08 | Local blocking history and clear history              | ~~P0~~ **P1 [CHANGED]** |
 | FR-09 | Per-site allowlist and current-site pause             | P1       |
 | FR-10 | Import/export filter profiles                         | P2       |
@@ -288,7 +291,7 @@ A focused 15–20-hour weekend can yield a functional personal prototype. A more
 - Should Reveal be always available, or optionally disabled per profile?
   **[PROPOSED]** Always available in v0.1. A per-profile "no reveal" is a P2 nicety for people blocking themselves from spoilers.
 - Should temporary filters expire at a specific local time or when manually marked "watched"?
-  **[PROPOSED]** Both, and they are the same field: a time picker plus a "Watched it, turn this off" button in the popup that sets `expiresAt = now`.
+  **[PROPOSED]** ~~Both, and they are the same field: a time picker plus a "Watched it, turn this off" button in the popup that sets `expiresAt = now`.~~ **[CHANGED]** For v0.1, neither: a temporary filter is a line in the "Block these" box that the user deletes (and Saves) when done (§3.4). Scheduled expiry (FR-07) moves to Later.
 - Should history capture only counts, or also page titles and links (with additional privacy implications)?
   **[PROPOSED]** Counts only in v0.1. Titles and links are the very content the user asked not to see; storing and displaying them in a history list defeats the product.
 - Which three websites should be explicitly supported and tested first?
