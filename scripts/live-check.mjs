@@ -19,6 +19,10 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const extensionPath = join(root, "dist", "chrome");
 const argv = process.argv.slice(2);
 const revealMode = argv.includes("--reveal");
+// Disable the whole-page rules so per-card masking is observable on pages that
+// would otherwise be covered whole. The debug content script reads this flag
+// from the page's localStorage (set below before any page script runs).
+const noPageRule = argv.includes("--no-page-rule");
 // The URL is an argument; no filter term is baked into the default (design 6.3).
 const TARGET = argv.find((a) => !a.startsWith("--")) || "https://news.google.com/";
 const SETTLE_MS = 20_000;
@@ -37,7 +41,18 @@ let nestedMasks = 0;
 let nav = { href: TARGET, title: "", text: "" };
 let revealResults = [];
 
+let maskedTiles = {};
+
 try {
+  if (noPageRule) {
+    await context.addInitScript(() => {
+      try {
+        localStorage.setItem("blackout:no-page-rule", "1");
+      } catch {
+        /* storage may be unavailable before navigation */
+      }
+    });
+  }
   const page = context.pages()[0] || (await context.newPage());
   page.on("console", (msg) => {
     const text = msg.text();
@@ -62,6 +77,17 @@ try {
     text: (document.body ? document.body.innerText : "").slice(0, 300),
   }));
   masked = await page.locator(".blackout-ui").count();
+  // What kind of element each mask sits on (the masked container is the parent
+  // of our injected .blackout-ui host): a tag[role] breakdown of masked tiles.
+  maskedTiles = await page.evaluate(() => {
+    const counts = {};
+    for (const el of document.querySelectorAll(".blackout-blacked-out")) {
+      const role = el.getAttribute("role");
+      const key = el.tagName.toLowerCase() + (role ? `[role=${role}]` : "");
+      counts[key] = (counts[key] || 0) + 1;
+    }
+    return counts;
+  });
   nestedMasks = await page.evaluate(() => {
     let n = 0;
     for (const el of document.querySelectorAll(".blackout-blacked-out")) {
@@ -163,7 +189,7 @@ try {
   await rm(userDataDir, { recursive: true, force: true });
 }
 
-const matchCount = logLines.filter((l) => l.startsWith("match profile=")).length;
+const matchCount = logLines.filter((l) => l.startsWith("match term=")).length;
 const refusals = {};
 for (const line of logLines) {
   const m = line.match(/^container refused reason=(\S+)/);
@@ -175,7 +201,9 @@ const blocked =
 console.log("=== blackout live-check ===");
 console.log(`url: ${TARGET}`);
 console.log(`landed on: ${nav.href}`);
+console.log(`page-rule: ${noPageRule ? "OFF (--no-page-rule)" : "on"}`);
 console.log(`matches: ${matchCount}   containers masked: ${masked}   nested masks: ${nestedMasks} (must be 0)`);
+console.log(`masked tiles: ${Object.keys(maskedTiles).length ? JSON.stringify(maskedTiles) : "none"}`);
 console.log(`refusals: ${Object.keys(refusals).length ? JSON.stringify(refusals) : "none"}`);
 console.log(`[blackout] log lines: ${logLines.length}${logLines.length ? "  e.g. " + JSON.stringify(logLines.slice(0, 3)) : " (content script produced none)"}`);
 
