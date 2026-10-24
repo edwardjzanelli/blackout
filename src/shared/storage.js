@@ -6,7 +6,7 @@
 import { browser } from "./browser.js";
 
 /** Bump when the persisted shape changes; migrations branch on this (7a). */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 /**
  * @typedef {Object} FilterProfile
@@ -30,6 +30,8 @@ export const SCHEMA_VERSION = 1;
  * @property {string[]} siteAllowlist
  * @property {number} historyRetentionDays
  * @property {boolean} snarkyLabels
+ * @property {number} pageCoverRatio fraction of stories that must match (3.6)
+ * @property {number} pageCoverMinMatches minimum matching stories (3.6)
  */
 
 /**
@@ -49,7 +51,31 @@ function defaultPreferences() {
     siteAllowlist: [],
     historyRetentionDays: 30,
     snarkyLabels: false,
+    pageCoverRatio: 0.5,
+    pageCoverMinMatches: 6,
   };
+}
+
+/**
+ * Bring stored preferences up to the current schema, adding keys introduced
+ * since they were written. Returns true if anything changed.
+ * @param {Preferences} preferences
+ * @param {number} fromVersion
+ * @returns {boolean}
+ */
+function migratePreferences(preferences, fromVersion) {
+  let changed = false;
+  if (fromVersion < 2) {
+    if (typeof preferences.pageCoverRatio !== "number") {
+      preferences.pageCoverRatio = 0.5;
+      changed = true;
+    }
+    if (typeof preferences.pageCoverMinMatches !== "number") {
+      preferences.pageCoverMinMatches = 6;
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 /**
@@ -95,6 +121,8 @@ export async function loadState() {
   }
   if (!preferences || typeof preferences !== "object") {
     preferences = defaultPreferences();
+    toWrite.preferences = preferences;
+  } else if (migratePreferences(preferences, typeof schemaVersion === "number" ? schemaVersion : 0)) {
     toWrite.preferences = preferences;
   }
   if (schemaVersion !== SCHEMA_VERSION) {

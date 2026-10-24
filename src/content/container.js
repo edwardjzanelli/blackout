@@ -86,6 +86,24 @@ function isRepeatedItem(el) {
 }
 
 /**
+ * If el is a repeated-list item (a detected story, design 3.6), return its
+ * group: the parent, the shared signature, and the total number of siblings
+ * sharing it (counting masked siblings, since the signature ignores our class).
+ * @param {Element} el
+ * @returns {{parent: Element, signature: string, size: number}|null}
+ */
+export function repeatedGroup(el) {
+  const parent = el.parentElement;
+  if (!parent) return null;
+  const sig = signature(el);
+  let size = 0;
+  for (const child of parent.children) {
+    if (signature(child) === sig) size++;
+  }
+  return size >= MIN_REPEATED_SIBLINGS ? { parent, signature: sig, size } : null;
+}
+
+/**
  * @typedef {Object} ContainerDecision
  * @property {Element|null} container the element to mask, or null to skip
  * @property {"chosen"|"smallest"|"too-large"|"contains-inputs"|"forbidden-tag"|"forbidden-role"|"no-candidate"} reason

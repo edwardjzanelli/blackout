@@ -55,11 +55,20 @@ function termsToRegExp(terms) {
 }
 
 /**
+ * @param {string} term
+ * @returns {RegExp|null}
+ */
+function termToRegExp(term) {
+  const pattern = termPattern(term);
+  return pattern ? new RegExp(pattern, "iu") : null;
+}
+
+/**
  * @typedef {Object} CompiledProfile
  * @property {string} id
  * @property {string} name
  * @property {number|null} expiresAt
- * @property {RegExp} include
+ * @property {{term: string, re: RegExp}[]} terms include terms kept as entered
  * @property {RegExp|null} exclude
  */
 
@@ -82,13 +91,17 @@ export function compileMatcher(profiles) {
   const compiled = [];
   for (const profile of profiles || []) {
     if (!profile || !profile.enabled) continue;
-    const include = termsToRegExp(profile.includeTerms || []);
-    if (!include) continue;
+    const terms = [];
+    for (const term of profile.includeTerms || []) {
+      const re = termToRegExp(term);
+      if (re) terms.push({ term, re });
+    }
+    if (terms.length === 0) continue;
     compiled.push({
       id: profile.id,
       name: profile.name,
       expiresAt: profile.expiresAt ?? null,
-      include,
+      terms,
       exclude: termsToRegExp(profile.excludeTerms || []),
     });
   }
@@ -96,7 +109,7 @@ export function compileMatcher(profiles) {
   // One combined regex across every include pattern, for the cheap "is there
   // any hit at all" prefilter in the content script (design 5.1a).
   const combined = compiled.length
-    ? new RegExp(compiled.map((c) => c.include.source).join("|"), "iu")
+    ? new RegExp(compiled.flatMap((c) => c.terms.map((t) => t.re.source)).join("|"), "iu")
     : null;
 
   return {
@@ -112,10 +125,18 @@ export function compileMatcher(profiles) {
       const normalized = normalize(text);
       for (const c of compiled) {
         if (c.expiresAt != null && c.expiresAt < now) continue; // expiry (6.1)
-        const m = c.include.exec(normalized);
-        if (!m) continue;
+        // Find which include term matched, reported as the user entered it
+        // (not the matched surface form, design 3.6).
+        let hitTerm = null;
+        for (const t of c.terms) {
+          if (t.re.test(normalized)) {
+            hitTerm = t.term;
+            break;
+          }
+        }
+        if (!hitTerm) continue;
         if (c.exclude && c.exclude.test(normalized)) continue; // excludeTerms veto
-        return { profileId: c.id, profileName: c.name, term: m[0] };
+        return { profileId: c.id, profileName: c.name, term: hitTerm };
       }
       return null;
     },

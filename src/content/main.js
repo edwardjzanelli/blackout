@@ -9,12 +9,21 @@ import { compileMatcher } from "./matcher.js";
 import { findContainer } from "./container.js";
 import { makeCandidateWalker, isSkippable } from "./scan.js";
 import { reverify } from "./durability.js";
+import { ruleOneTerm, storyCounts, shouldCoverByStories, mostMatchedTerm } from "./whole-page.js";
+import { storyKey, isRevealed, reset as resetRevealed } from "./revealed.js";
+import * as pageCover from "./page-cover.js";
+import * as pageMode from "./page-mode.js";
 import * as overlay from "./overlay.js";
 
 const DEBUG = false;
 
 const win = window;
 const doc = document;
+
+/** Whole-page blackout state (design 3.6). pageMode holds the either/or state. */
+let prefs = null;
+/** include term (as entered) -> {count, profileName}; for the cover label. */
+let termInfo = new Map();
 
 /** Attributes that carry matchable text (design 5.1). */
 const ATTRS = ["title", "aria-label", "alt"];
@@ -37,6 +46,9 @@ let processed = new WeakMap();
 
 /** Containers we have blacked out, for teardown and re-verification. */
 const activeContainers = new Set();
+
+/** masked container -> the include term that masked it (for revealed identity). */
+let storyTerm = new WeakMap();
 
 /** Masked containers to re-verify (deduped), and the queue draining them. */
 let reverifyQueue = [];
@@ -163,6 +175,7 @@ function maskedAncestor(node) {
  */
 function handleCandidate(cacheKey, element, text) {
   if (!element) return;
+  if (!pageMode.canMaskCards()) return; // whole-page mode: no per-card masks (3.6)
   const h = hashText(text);
   const prev = processed.get(cacheKey);
   // Skip only if unchanged AND any mask it produced is still intact (5.3a).
@@ -194,6 +207,26 @@ function handleCandidate(cacheKey, element, text) {
     return;
   }
 
+  // The user's Reveal wins until reload or Black out again (design 3.3): never
+  // re-mask a story they revealed, identified by term + container text so it
+  // holds across re-render or node replacement.
+  if (isRevealed(storyKey(hit.term, container.textContent || ""))) {
+    processed.set(cacheKey, { hash: h, container: null });
+    return;
+  }
+
+  // Masks never nest (design 3.6 addendum): skip a match inside an already
+  // masked element, and when masking one that contains inner masks remove those
+  // first (exact restore), so one Reveal reveals the whole story.
+  if (overlay.hasMaskedAncestor(container)) {
+    processed.set(cacheKey, { hash: h, container: null });
+    return;
+  }
+  for (const inner of overlay.masksWithin(container)) {
+    overlay.cleanup(inner);
+    activeContainers.delete(inner);
+  }
+
   // Mask each container once: text, aria-label and title matches in the same
   // card resolve here and must produce a single mask and a single log line. A
   // match whose container is already masked and intact just refreshes the cache.
@@ -204,11 +237,13 @@ function handleCandidate(cacheKey, element, text) {
   }
 
   log(`match profile="${hit.profileName}" term="${hit.term}" text="${snippet(text)}"`);
-  overlay.blackout(container, hit.profileName, { window: win });
+  overlay.blackout(container, hit.profileName, { window: win, term: hit.term });
   overlay.reapply(container); // if a record existed but the page stripped it
   if (firstTime) {
     activeContainers.add(container);
+    storyTerm.set(container, hit.term);
     maskObserver.observe(container, { attributes: true, attributeFilter: ["class"], childList: true });
+    countTerm(hit.term, hit.profileName); // one per masked story (design 3.6)
   }
   processed.set(cacheKey, { hash: h, container });
   log(`container masked tag=${container.tagName} role="${roleOf(container)}" size=${sizeOf(container)}`);
@@ -250,11 +285,18 @@ function drain() {
   const start = perfNow();
 
   // Re-verify masked containers first: cheap, and keeps masks stuck as the feed
-  // re-renders. Leftover carries to the next batch like scan work.
+  // re-renders. Leftover carries to the next batch like scan work. In whole-page
+  // mode there are no card masks to re-verify (design 3.6).
   while (reverifyQueue.length && perfNow() - start < MAX_BATCH_MS) {
     const container = reverifyQueue.shift();
     reverifyPending.delete(container);
-    if (activeContainers.has(container)) reverify(container, matcher, win, activeContainers);
+    if (!pageMode.inWholePage() && activeContainers.has(container)) {
+      // A user-revealed story is never re-masked, even though revealing removes
+      // our class (design 3.3): don't let reverify read that as a page strip.
+      if (isRevealed(storyKey(storyTerm.get(container) || "", container.textContent || ""))) continue;
+      const outcome = reverify(container, matcher, win, activeContainers);
+      if (outcome === "reapplied") log(`reverify reapplied tag=${container.tagName}`);
+    }
   }
 
   while (perfNow() - start < MAX_BATCH_MS) {
@@ -295,7 +337,10 @@ function scheduleFlush() {
   flushTimer = win.setTimeout(() => {
     flushTimer = null;
     lastFlushAt = perfNow();
-    if (drain()) scheduleFlush();
+    const more = drain();
+    checkRule1(); // title may have arrived or changed since the last batch
+    checkRule2(); // re-evaluate detected-story coverage after each batch
+    if (more) scheduleFlush();
     else log(`scan examined textNodes=${examinedText} attrs=${examinedAttrs}`);
   }, wait);
 }
@@ -308,12 +353,67 @@ function enqueue(node) {
   pending.push(node);
 }
 
-function teardownAll() {
+function clearCardMasks() {
   for (const container of activeContainers) overlay.cleanup(container);
   activeContainers.clear();
   maskObserver.disconnect();
   reverifyQueue = [];
   reverifyPending = new WeakSet();
+}
+
+function teardownAll() {
+  clearCardMasks();
+  pageCover.uncoverPage();
+  pageMode.reset();
+  resetRevealed();
+  storyTerm = new WeakMap();
+  termInfo = new Map();
+}
+
+/** @param {string} term @param {string} profileName */
+function countTerm(term, profileName) {
+  const info = termInfo.get(term) || { count: 0, profileName };
+  info.count += 1;
+  termInfo.set(term, info);
+}
+
+/**
+ * Cover the whole page once. Whole-page and per-card blackout are either/or
+ * (design 3.6): dropping into whole-page mode removes every existing card mask
+ * (exact restore) and blocks any further card masking until reload.
+ * @param {string} term
+ */
+function coverNow(term) {
+  if (pageMode.inWholePage() || !term) return;
+  pageMode.enterWholePage(activeContainers); // removes card masks, flips the mode
+  maskObserver.disconnect();
+  reverifyQueue = [];
+  reverifyPending = new WeakSet();
+  const info = termInfo.get(term);
+  pageCover.coverPage(doc, term, info ? info.profileName : "", { window: win });
+  log(`page covered term="${term}"`);
+}
+
+/** Rule 1: title or URL search word matches a filter (design 3.6). */
+function checkRule1() {
+  if (pageMode.inWholePage() || paused || !matcher || matcher.isEmpty) return;
+  const hit = ruleOneTerm(
+    matcher,
+    { title: doc.title || "", search: win.location.search || "" },
+    Date.now(),
+  );
+  if (hit) {
+    countTerm(hit.term, hit.profileName);
+    coverNow(hit.term);
+  }
+}
+
+/** Rule 2: enough detected stories match (design 3.6). */
+function checkRule2() {
+  if (pageMode.inWholePage() || paused || !prefs) return;
+  if (shouldCoverByStories(storyCounts(activeContainers), prefs)) {
+    coverNow(mostMatchedTerm(termInfo));
+  }
 }
 
 const observer = new MutationObserver((mutations) => {
@@ -346,7 +446,7 @@ function startObserver() {
 }
 
 function scanAll() {
-  if (paused || !matcher || matcher.isEmpty) return;
+  if (paused || !matcher || matcher.isEmpty || pageMode.inWholePage()) return;
   log("scan start");
   examinedText = 0;
   examinedAttrs = 0;
@@ -356,16 +456,19 @@ function scanAll() {
 
 async function reevaluate() {
   const state = await loadState();
+  prefs = state.preferences;
   paused = !state.preferences.globalEnabled;
   matcher = compileMatcher(state.profiles);
   teardownAll();
   processed = new WeakMap();
   refusalLogged = new WeakSet();
+  checkRule1();
   scanAll();
 }
 
 async function init() {
   const state = await loadState();
+  prefs = state.preferences;
   log(
     `profiles loaded: ${state.profiles.length}${state.seeded ? " (seeded starter profile)" : ""}`,
   );
@@ -374,6 +477,10 @@ async function init() {
 
   startObserver();
   onStateChanged(reevaluate);
+
+  // Rule 1 at document_start, before first paint, so a matching search page
+  // never flashes its results (design 3.6).
+  checkRule1();
 
   if (doc.readyState === "loading") {
     doc.addEventListener("DOMContentLoaded", scanAll, { once: true });

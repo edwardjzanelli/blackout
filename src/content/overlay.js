@@ -3,6 +3,8 @@
 // child; one injected child, isolated in a shadow root, carries the label and
 // the Reveal / Black out again control. Cleanup restores the page exactly.
 
+import { storyKey, markRevealed, clearRevealed } from "./revealed.js";
+
 const BLACKED_CLASS = "blackout-blacked-out";
 const UI_CLASS = "blackout-ui";
 const STYLE_ID = "blackout-stylesheet";
@@ -16,8 +18,9 @@ const DOCUMENT_CSS = `
   visibility: hidden !important;
 }
 .${UI_CLASS} {
-  z-index: 2147483646;
+  z-index: 2147483647;
   visibility: visible !important;
+  pointer-events: auto !important;
 }
 .${UI_CLASS}[${STATE_ATTR}="blacked-out"] {
   position: absolute;
@@ -70,10 +73,61 @@ button:focus-visible { outline: 2px solid #4aa3ff; outline-offset: 2px; }
  * @property {HTMLButtonElement} button
  * @property {boolean} positionChanged
  * @property {string} prevInlinePosition
+ * @property {string} term matched include term, for revealed-story identity
  */
 
 /** @type {WeakMap<Element, OverlayRecord>} */
 const overlays = new WeakMap();
+
+/** Pointer/mouse/touch events whose default (navigation, selection) we cancel. */
+const POINTER_EVENTS = ["click", "mousedown", "mouseup", "pointerdown", "pointerup", "touchstart", "touchend"];
+
+/**
+ * Make an injected host swallow interaction so it never reaches the page: in
+ * the capture phase cancel the default action (so an enclosing <a> never
+ * navigates), and in the bubble phase stop the event leaving the host (so page
+ * click handlers never fire). Keyboard activation still reaches the button, so
+ * keydown/keyup are only stopped, never default-cancelled. Shared by the card
+ * mask and the whole-page cover (design 3.3, 8a, 3.6).
+ * @param {HTMLElement} host
+ */
+export function armSwallow(host) {
+  for (const type of POINTER_EVENTS) {
+    host.addEventListener(type, (e) => e.preventDefault(), true);
+    host.addEventListener(type, (e) => e.stopPropagation(), false);
+  }
+  for (const type of ["keydown", "keyup"]) {
+    host.addEventListener(type, (e) => e.stopPropagation(), false);
+  }
+}
+
+/**
+ * Whether any ancestor of container is already masked (design 3.6 addendum:
+ * masks must never nest).
+ * @param {Element} container
+ * @returns {boolean}
+ */
+export function hasMaskedAncestor(container) {
+  for (let el = container.parentElement; el; el = el.parentElement) {
+    if (overlays.has(el)) return true;
+  }
+  return false;
+}
+
+/**
+ * The masked containers strictly inside container (to remove before masking it,
+ * so masks never nest; design 3.6 addendum).
+ * @param {Element} container
+ * @returns {Element[]}
+ */
+export function masksWithin(container) {
+  const inner = [];
+  for (const host of container.querySelectorAll(`.${UI_CLASS}`)) {
+    const masked = host.parentElement;
+    if (masked && masked !== container && overlays.has(masked)) inner.push(masked);
+  }
+  return inner;
+}
 
 /**
  * Inject the shared document stylesheet once.
@@ -124,12 +178,16 @@ export function reapply(container) {
  * Black out a container.
  * @param {Element} container
  * @param {string} profileName name of the profile that fired, shown on the label
- * @param {{window?: Window}} [options]
+ * @param {{window?: Window, term?: string}} [options] term is the matched
+ *   include term, used to track a Reveal by story identity (design 3.3)
  * @returns {OverlayRecord}
  */
 export function blackout(container, profileName, options = {}) {
   const existing = overlays.get(container);
-  if (existing) return existing;
+  if (existing) {
+    if (options.term) existing.term = options.term; // node reused for a new story
+    return existing;
+  }
 
   const doc = container.ownerDocument;
   const win = options.window || doc.defaultView || globalThis;
@@ -148,6 +206,12 @@ export function blackout(container, profileName, options = {}) {
   const host = doc.createElement("div");
   host.className = UI_CLASS;
   host.setAttribute(STATE_ATTR, "blacked-out");
+  // Make the host the topmost clickable thing inside the masked element on any
+  // site: its own stacking context (isolation) at the maximum z-index, set
+  // inline so page CSS cannot lower it (design 3.3, 8a).
+  host.style.setProperty("z-index", "2147483647", "important");
+  host.style.setProperty("isolation", "isolate", "important");
+  host.style.setProperty("pointer-events", "auto", "important");
   const shadow = host.attachShadow({ mode: "open" });
 
   const style = doc.createElement("style");
@@ -174,31 +238,39 @@ export function blackout(container, profileName, options = {}) {
   shadow.appendChild(style);
   shadow.appendChild(panel);
 
+  const term = options.term || "";
+
   /** @param {"blacked-out"|"revealed"} state */
   function setState(state) {
     host.setAttribute(STATE_ATTR, state);
+    // Record the user's decision by story identity so every masking path
+    // respects it until reload or Black out again (design 3.3).
+    const key = storyKey(term, container.textContent || "");
     if (state === "revealed") {
       container.classList.remove(BLACKED_CLASS);
       button.textContent = "Black out again";
+      markRevealed(key);
     } else {
       container.classList.add(BLACKED_CLASS);
       button.textContent = "Reveal";
+      clearRevealed(key);
     }
   }
 
-  button.addEventListener("click", (event) => {
-    // The cover sits above the card, but guard anyway so a reveal click can
-    // never fall through to a link underneath (design 3.3, 8a).
-    event.preventDefault();
-    event.stopPropagation();
+  button.addEventListener("click", () => {
     const revealed = host.getAttribute(STATE_ATTR) === "revealed";
     setState(revealed ? "blacked-out" : "revealed");
   });
 
+  // A click on our UI must never reach the page or navigate an enclosing <a>:
+  // cancel the default action in the capture phase (before the page or a link
+  // acts), and stop the event ever bubbling out of the host (design 3.3, 8a).
+  armSwallow(host);
+
   container.classList.add(BLACKED_CLASS);
   container.appendChild(host);
 
-  const record = { host, button, positionChanged, prevInlinePosition };
+  const record = { host, button, positionChanged, prevInlinePosition, term };
   overlays.set(container, record);
   return record;
 }

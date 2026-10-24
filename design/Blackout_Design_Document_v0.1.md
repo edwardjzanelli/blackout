@@ -69,6 +69,12 @@ A user creates "Survivor spoilers," enters phrases such as Survivor, tribal coun
 
 Automatic filtering needs access to all sites, and Chrome shows that as "Read and change all your data on all websites." Someone arriving from a social post will see that warning before anything else. The first-run page must say, in one screen, that nothing leaves the device, that there is no network code, and link to the source (see §9a). The first-run page also offers one starter profile (Kardashians) pre-filled and enabled, so the extension does something visible on the first page the user opens. The user can edit or delete it like any other.
 
+**3.6 [ADDED] Whole-page blackout.** When a page is mostly blocked content, Blackout covers the whole window instead of blacking out every story. The cover uses the same mechanism as a card mask (§8a): label, profile name, **Reveal**, **Black out again**. Reveal lasts until the page reloads. The label reads "Lots of *term* references on this page, so we blocked out the entire page.", where *term* is the filter term exactly as the user entered it, choosing the most frequently matched one when several match. The whole page is covered when either:
+1. the page title or the URL's search words match an active filter, or
+2. more than half of the detected stories on the page match, with at least 6 matching.
+
+Both thresholds (half, 6) are preferences, so they can be tuned later. **[ADDED]** Whole-page and per-card blackout are either/or: once a page is in whole-page mode, Reveal shows it completely unmasked, and Black out again restores the whole-page cover.
+
 # 4. Functional requirements
 
 | ID    | Requirement                                           | Priority |
@@ -89,6 +95,7 @@ Automatic filtering needs access to all sites, and Chrome shows that as "Read an
 | FR-14 | **[ADDED]** Site adapters for Google News, YouTube, Facebook (§5.4) | P0 |
 | FR-15 | **[ADDED]** Single-source build that emits per-browser packages (§6a) | P0 (Chrome), P1 (Firefox, Safari) |
 | FR-16 | **[ADDED]** Exclusion terms per profile (UI for the existing `excludeTerms`) | P1 |
+| FR-17 | **[ADDED]** Whole-page blackout per §3.6 | P0 |
 
 # 5. Matching and content selection
 
