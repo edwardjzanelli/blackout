@@ -4,11 +4,31 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Blackout</title>
+    <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <!-- Toolbar popup: pause/status/counter (design 3.1). Stub for M0. -->
-    <h1>Blackout</h1>
-    <p>Popup coming soon.</p>
+    <main id="blackout-popup">
+      <h1>Blackout</h1>
+
+      <label class="switch-row">
+        <input id="on-switch" type="checkbox" />
+        <span>Blackout is on</span>
+      </label>
+
+      <label class="switch-row">
+        <input id="site-switch" type="checkbox" />
+        <span>Pause on <span id="site-name">this site</span></span>
+      </label>
+
+      <p id="page-count" class="page-count">Not available on this page</p>
+
+      <dl class="counts">
+        <div><dt>Blocked today</dt><dd id="count-today">0</dd></div>
+        <div><dt>Brain cells saved</dt><dd id="count-total">0</dd></div>
+      </dl>
+
+      <button id="open-settings" type="button" class="settings">Settings</button>
+    </main>
     <script type="module" src="popup.js"></script>
   </body>
 </html>

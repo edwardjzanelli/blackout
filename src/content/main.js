@@ -4,7 +4,14 @@
 // Processed nodes are cached by node + text hash so recycled feed nodes are
 // re-checked. Our own injected nodes are ignored to avoid recursive matching.
 
-import { loadState, onStateChanged } from "../shared/storage.js";
+import {
+  loadState,
+  onStateChanged,
+  loadDeviceState,
+  onDeviceStateChanged,
+  isPaused,
+  bumpCounter,
+} from "../shared/storage.js";
 import { compileMatcher, displayTerm } from "./matcher.js";
 import { findContainer } from "./container.js";
 import { makeCandidateWalker, isSkippable } from "./scan.js";
@@ -34,6 +41,7 @@ const MAX_BATCH_MS = 50;
 
 /** @type {import("./matcher.js").Matcher|null} */
 let matcher = null;
+/** Paused on this device/site (design 3.1, FR-09); recomputed from local state. */
 let paused = false;
 
 /**
@@ -245,6 +253,7 @@ function handleCandidate(cacheKey, element, text) {
     storyTerm.set(container, term);
     maskObserver.observe(container, { attributes: true, attributeFilter: ["class"], childList: true });
     countTerm(term); // one per masked story (design 3.6)
+    recordBlocked(); // one distinct story blocked (FR-12)
   }
   processed.set(cacheKey, { hash: h, container });
   log(`container masked tag=${container.tagName} role="${roleOf(container)}" size=${sizeOf(container)}`);
@@ -391,6 +400,7 @@ function coverNow(term) {
   reverifyQueue = [];
   reverifyPending = new WeakSet();
   pageCover.coverPage(doc, term, { window: win }); // term is the only rendered text
+  recordBlocked(); // a whole-page cover counts as one blocked story (FR-12)
   log(`page covered term="${term}"`);
 }
 
@@ -455,10 +465,31 @@ function scanAll() {
   scheduleFlush();
 }
 
+/** Distinct stories blocked on this page right now (whole-page cover is 1). */
+function blockedCount() {
+  return pageMode.inWholePage() ? 1 : activeContainers.size;
+}
+
+/** Add one distinct blocked story to the per-device counters (FR-12). */
+function recordBlocked() {
+  const today = new Date().toISOString().slice(0, 10);
+  bumpCounter(today, 1).catch(() => {});
+}
+
+/** Recompute pause from per-device state; tear everything down while paused. */
+async function refreshPause() {
+  const device = await loadDeviceState();
+  const next = isPaused(device, win.location.hostname || "");
+  if (next === paused) return;
+  paused = next;
+  if (paused) teardownAll(); // remove masks and cover, exact restore
+  else reevaluate();
+}
+
 async function reevaluate() {
-  const state = await loadState();
+  const [state, device] = await Promise.all([loadState(), loadDeviceState()]);
   prefs = state.preferences;
-  paused = !state.preferences.globalEnabled;
+  paused = isPaused(device, win.location.hostname || "");
   matcher = compileMatcher(state.profiles);
   teardownAll();
   processed = new WeakMap();
@@ -468,16 +499,28 @@ async function reevaluate() {
 }
 
 async function init() {
-  const state = await loadState();
+  const [state, device] = await Promise.all([loadState(), loadDeviceState()]);
   prefs = state.preferences;
   log(
     `profiles loaded: ${state.profiles.length}${state.seeded ? " (seeded starter profile)" : ""}`,
   );
-  paused = !state.preferences.globalEnabled;
+  paused = isPaused(device, win.location.hostname || "");
   matcher = compileMatcher(state.profiles);
 
   startObserver();
   onStateChanged(reevaluate);
+  onDeviceStateChanged(refreshPause); // popup pause toggles re-evaluate here
+
+  // Answer the popup's "blocked on this page" request (design 3.1).
+  const api = globalThis.browser ?? globalThis.chrome;
+  if (api && api.runtime && api.runtime.onMessage) {
+    api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+      if (message && message.type === "blackout:count") {
+        sendResponse({ available: true, count: blockedCount() });
+      }
+      return false;
+    });
+  }
 
   // Rule 1 at document_start, before first paint, so a matching search page
   // never flashes its results (design 3.6).
