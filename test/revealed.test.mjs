@@ -16,9 +16,9 @@ import * as overlay from "../src/content/overlay.js";
 const BLACKED = "blackout-blacked-out";
 const STARTER = {
   id: "k",
-  name: "Kardashians",
+  name: "Quendle",
   enabled: true,
-  includeTerms: ["Kardashian", "Kris Jenner"],
+  includeTerms: ["Quendle", "Robin Quendle"],
   excludeTerms: [],
   matchMode: "phrase",
   expiresAt: null,
@@ -64,7 +64,7 @@ function maskAll(dom) {
     const { container } = findContainer(node.parentElement, dom.window);
     if (!container) continue;
     if (isRevealed(storyKey(hit.term, container.textContent || ""))) continue; // user revealed
-    overlay.blackout(container, "Kardashians", { window: dom.window, term: hit.term });
+    overlay.blackout(container, hit.term, { window: dom.window });
     overlay.reapply(container);
     active.add(container);
   }
@@ -84,7 +84,7 @@ function guardedReverify(card, active, win, term) {
 
 test("Reveal, then a subsequent batch does not re-mask the story", () => {
   reset();
-  const dom = pageWith("Kim Kardashian spotted downtown");
+  const dom = pageWith("Quendle spotted downtown");
   const card = dom.window.document.getElementById("c");
   maskAll(dom);
   clickReveal(card);
@@ -96,13 +96,13 @@ test("Reveal, then a subsequent batch does not re-mask the story", () => {
 
 test("Reveal, then the page replaces the node with a fresh clone: still revealed", () => {
   reset();
-  const dom = pageWith("Kim Kardashian spotted downtown");
+  const dom = pageWith("Quendle spotted downtown");
   const { document } = dom.window;
   maskAll(dom);
   clickReveal(document.getElementById("c"));
 
   // Page re-renders: a brand-new node with the same story, no mask.
-  const fresh = setCard(dom, "c", "Kim Kardashian spotted downtown");
+  const fresh = setCard(dom, "c", "Quendle spotted downtown");
   document.getElementById("c").replaceWith(fresh);
 
   maskAll(dom);
@@ -111,25 +111,25 @@ test("Reveal, then the page replaces the node with a fresh clone: still revealed
 
 test("Reveal, then the page reuses the node for a different matching story: masked", () => {
   reset();
-  const dom = pageWith("Kim Kardashian spotted downtown");
+  const dom = pageWith("Quendle spotted downtown");
   const card = dom.window.document.getElementById("c");
   maskAll(dom);
   clickReveal(card);
 
-  setCard(dom, "c", "Kris Jenner announces a new venture"); // different story
+  setCard(dom, "c", "Robin Quendle announces a new venture"); // different story
   maskAll(dom);
   assert.ok(card.classList.contains(BLACKED), "a new story in the same node is masked");
 });
 
 test("Black out again, then reverify keeps it masked", () => {
   reset();
-  const dom = pageWith("Kim Kardashian spotted downtown");
+  const dom = pageWith("Quendle spotted downtown");
   const card = dom.window.document.getElementById("c");
   maskAll(dom);
   clickReveal(card); // reveal
   clickReveal(card); // black out again
   assert.ok(card.classList.contains(BLACKED), "re-masked by Black out again");
 
-  guardedReverify(card, new Set([card]), dom.window, "Kardashian");
+  guardedReverify(card, new Set([card]), dom.window, "Quendle");
   assert.ok(card.classList.contains(BLACKED), "reverify keeps it masked");
 });

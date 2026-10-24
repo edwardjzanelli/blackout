@@ -10,6 +10,9 @@ const UI_CLASS = "blackout-ui";
 const STYLE_ID = "blackout-stylesheet";
 const STATE_ATTR = "data-blackout-state";
 
+/** Minimum masked-element height so the 24px Reveal button is never clipped. */
+const MIN_MASK_HEIGHT = 28;
+
 const DOCUMENT_CSS = `
 .${BLACKED_CLASS} {
   background-color: #000 !important;
@@ -28,6 +31,9 @@ const DOCUMENT_CSS = `
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Make the host a size query container so the shadow UI can adapt to the
+     masked element's height and width (design 8c), no JS layout loop. */
+  container-type: size;
 }
 .${UI_CLASS}[${STATE_ATTR}="revealed"] {
   position: absolute;
@@ -36,35 +42,63 @@ const DOCUMENT_CSS = `
 }
 `;
 
+// Mobile-first: the smallest layout is the Reveal button alone. Container
+// queries progressively add the term, then the full stacked label, as the
+// masked element gets taller/wider. Reveal (and "Black out again") is never
+// dropped and keeps a 24px minimum clickable height (design 8c).
 const SHADOW_CSS = `
 :host { all: initial; }
 .panel {
   box-sizing: border-box;
+  width: 100%;
+  height: 100%;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  justify-content: center;
+  gap: 4px 8px;
+  padding: 2px 6px;
+  font: 13px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: #fff;
   text-align: center;
+  overflow: hidden;
+}
+.label,
+.profile {
+  display: none;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .label { font-weight: 600; }
-.profile { font-size: 12px; opacity: 0.85; }
+.profile { opacity: 0.9; }
 button {
+  flex: none;
   font: inherit;
   cursor: pointer;
-  padding: 4px 12px;
+  min-height: 24px;
+  padding: 2px 10px;
   border: 1px solid #fff;
   border-radius: 4px;
   background: #222;
   color: #fff;
+  white-space: nowrap;
 }
 button:hover { background: #333; }
 button:focus-visible { outline: 2px solid #4aa3ff; outline-offset: 2px; }
-:host([${STATE_ATTR}="revealed"]) .label,
-:host([${STATE_ATTR}="revealed"]) .profile { display: none; }
 :host([${STATE_ATTR}="revealed"]) button { background: rgba(0, 0, 0, 0.75); }
+
+/* Room beside the button: one row of term + Reveal (drop the long label). */
+@container (min-width: 140px) and (min-height: 30px) {
+  .profile { display: inline-block; }
+}
+/* Tall and wide enough: the full stacked layout. */
+@container (min-width: 160px) and (min-height: 92px) {
+  .panel { flex-direction: column; gap: 6px; padding: 8px 12px; }
+  .label { display: block; }
+  .profile { display: block; }
+}
 `;
 
 /**
@@ -73,6 +107,8 @@ button:focus-visible { outline: 2px solid #4aa3ff; outline-offset: 2px; }
  * @property {HTMLButtonElement} button
  * @property {boolean} positionChanged
  * @property {string} prevInlinePosition
+ * @property {boolean} minHeightNeeded whether we grew the element for the button
+ * @property {string} prevInlineMinHeight
  * @property {string} term matched include term, for revealed-story identity
  */
 
@@ -177,15 +213,15 @@ export function reapply(container) {
 /**
  * Black out a container.
  * @param {Element} container
- * @param {string} profileName name of the profile that fired, shown on the label
- * @param {{window?: Window, term?: string}} [options] term is the matched
- *   include term, used to track a Reveal by story identity (design 3.3)
+ * @param {string} term the matched include term, as entered: shown on the label
+ *   (design 3.3) and used to track a Reveal by story identity
+ * @param {{window?: Window}} [options]
  * @returns {OverlayRecord}
  */
-export function blackout(container, profileName, options = {}) {
+export function blackout(container, term, options = {}) {
   const existing = overlays.get(container);
   if (existing) {
-    if (options.term) existing.term = options.term; // node reused for a new story
+    if (term) existing.term = term; // node reused for a new story
     return existing;
   }
 
@@ -202,6 +238,20 @@ export function blackout(container, profileName, options = {}) {
     container.style.position = "relative";
     positionChanged = true;
   }
+
+  // The one accepted layout change (design 8c): if the element is too short for
+  // the Reveal button, grow its min-height just enough while masked. Recorded,
+  // and restored exactly on Reveal and cleanup.
+  const prevInlineMinHeight = container.style.minHeight;
+  let minHeightNeeded = false;
+  const applyMinHeight = () => {
+    if (minHeightNeeded) container.style.setProperty("min-height", `${MIN_MASK_HEIGHT}px`);
+  };
+  const restoreMinHeight = () => {
+    if (!minHeightNeeded) return;
+    if (prevInlineMinHeight) container.style.minHeight = prevInlineMinHeight;
+    else container.style.removeProperty("min-height");
+  };
 
   const host = doc.createElement("div");
   host.className = UI_CLASS;
@@ -224,21 +274,21 @@ export function blackout(container, profileName, options = {}) {
   label.className = "label";
   label.textContent = "Content blacked out";
 
+  // The label shows the matched filter term as entered, not a profile name
+  // (design 3.3 [CHANGED]).
   const profile = doc.createElement("span");
   profile.className = "profile";
-  profile.textContent = profileName || "";
+  profile.textContent = term || "";
 
   const button = doc.createElement("button");
   button.type = "button";
   button.textContent = "Reveal";
 
   panel.appendChild(label);
-  if (profileName) panel.appendChild(profile);
+  if (term) panel.appendChild(profile);
   panel.appendChild(button);
   shadow.appendChild(style);
   shadow.appendChild(panel);
-
-  const term = options.term || "";
 
   /** @param {"blacked-out"|"revealed"} state */
   function setState(state) {
@@ -249,10 +299,12 @@ export function blackout(container, profileName, options = {}) {
     if (state === "revealed") {
       container.classList.remove(BLACKED_CLASS);
       button.textContent = "Black out again";
+      restoreMinHeight();
       markRevealed(key);
     } else {
       container.classList.add(BLACKED_CLASS);
       button.textContent = "Reveal";
+      applyMinHeight();
       clearRevealed(key);
     }
   }
@@ -270,7 +322,13 @@ export function blackout(container, profileName, options = {}) {
   container.classList.add(BLACKED_CLASS);
   container.appendChild(host);
 
-  const record = { host, button, positionChanged, prevInlinePosition, term };
+  // Now the element is in its masked layout, measure it: if it is shorter than
+  // the Reveal button needs, grow it (design 8c).
+  const rect = typeof container.getBoundingClientRect === "function" ? container.getBoundingClientRect() : null;
+  minHeightNeeded = !rect || rect.height < MIN_MASK_HEIGHT;
+  applyMinHeight();
+
+  const record = { host, button, positionChanged, prevInlinePosition, prevInlineMinHeight, minHeightNeeded, term };
   overlays.set(container, record);
   return record;
 }
@@ -293,6 +351,13 @@ export function cleanup(container) {
       container.style.position = record.prevInlinePosition;
     } else {
       container.style.removeProperty("position");
+    }
+  }
+  if (record.minHeightNeeded) {
+    if (record.prevInlineMinHeight) {
+      container.style.minHeight = record.prevInlineMinHeight;
+    } else {
+      container.style.removeProperty("min-height");
     }
   }
   if (container.getAttribute("style") === "") container.removeAttribute("style");

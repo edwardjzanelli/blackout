@@ -68,11 +68,11 @@ export function isPageCovered() {
  * Cover the whole page. No-op if already covered (it stays until reload or the
  * user reveals, design 3.6: never flips back mid-scroll).
  * @param {Document} doc
- * @param {string} term the include term as entered, used in the label
- * @param {string} profileName
+ * @param {string} term the matched include term as entered; the only text
+ *   rendered on the cover (design 3.3, 3.6) — no profile name
  * @param {{window?: Window}} [options]
  */
-export function coverPage(doc, term, profileName, options = {}) {
+export function coverPage(doc, term, options = {}) {
   if (state) return;
 
   const host = doc.createElement("div");
@@ -91,9 +91,10 @@ export function coverPage(doc, term, profileName, options = {}) {
   const label = doc.createElement("p");
   label.className = "label";
   label.textContent = `Lots of ${term} references on this page, so we blocked out the entire page.`;
+  // The second line is the matched term exactly as entered (design 3.3).
   const profile = doc.createElement("p");
   profile.className = "profile";
-  profile.textContent = profileName || "";
+  profile.textContent = term || "";
   const revealBtn = doc.createElement("button");
   revealBtn.type = "button";
   revealBtn.className = "reveal";
@@ -105,7 +106,7 @@ export function coverPage(doc, term, profileName, options = {}) {
   againBtn.textContent = "Black out again";
 
   cover.appendChild(label);
-  if (profileName) cover.appendChild(profile);
+  if (term) cover.appendChild(profile);
   cover.appendChild(revealBtn);
   shadow.appendChild(style);
   shadow.appendChild(cover);

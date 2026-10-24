@@ -32,8 +32,8 @@ test("scans visible card text but skips script and style text", async () => {
   const { document } = dom.window;
   const text = visitedText(document, document.body);
 
-  assert.match(text, /Kim Kardashian spotted downtown/, "visible card text is scanned");
-  assert.doesNotMatch(text, /ItemList|Kardashian search results/, "JSON-LD script text is skipped");
+  assert.match(text, /Quendle spotted downtown/, "visible card text is scanned");
+  assert.doesNotMatch(text, /ItemList|Quendle search results/, "JSON-LD script text is skipped");
   assert.doesNotMatch(text, /pageData|searchTerm/, "inline script text is skipped");
   assert.doesNotMatch(text, /::after|content:/, "style text is skipped");
 });

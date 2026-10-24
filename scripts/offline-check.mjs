@@ -11,6 +11,7 @@ import { compileMatcher } from "../src/content/matcher.js";
 import { makeCandidateWalker } from "../src/content/scan.js";
 import { findContainer } from "../src/content/container.js";
 import * as overlay from "../src/content/overlay.js";
+import starterConfig from "../src/config/starter-profiles.json" with { type: "json" };
 
 const file = process.argv[2];
 if (!file) {
@@ -19,23 +20,13 @@ if (!file) {
 }
 
 const ATTRS = ["title", "aria-label", "alt"];
-const STARTER = {
-  id: "k",
-  name: "Kardashians",
-  enabled: true,
-  includeTerms: ["Kardashian", "Kris Jenner", "Kylie Jenner", "Kendall Jenner"],
-  excludeTerms: [],
-  matchMode: "phrase",
-  expiresAt: null,
-  siteScope: [],
-  createdAt: 0,
-  updatedAt: 0,
-};
+// Terms come only from the config (design 6.3), never hard-coded here.
+const profiles = starterConfig.map((p) => ({ ...p, enabled: p.enabled !== false }));
 
 const html = await readFile(file, "utf8");
 const dom = new JSDOM(html);
 const { document } = dom.window;
-const matcher = compileMatcher([STARTER]);
+const matcher = compileMatcher(profiles);
 
 function desc(el) {
   if (!el) return "(none)";
@@ -71,7 +62,7 @@ while ((node = walker.nextNode())) {
   let outcome;
   if (container) {
     if (!active.has(container)) {
-      overlay.blackout(container, hit.profileName, { window: dom.window });
+      overlay.blackout(container, hit.term, { window: dom.window });
       active.add(container);
     }
     outcome = `MASKED ${desc(container)}`;

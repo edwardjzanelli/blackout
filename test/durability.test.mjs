@@ -13,9 +13,9 @@ import * as overlay from "../src/content/overlay.js";
 const BLACKED = "blackout-blacked-out";
 const STARTER = {
   id: "k",
-  name: "Kardashians",
+  name: "Quendle",
   enabled: true,
-  includeTerms: ["Kardashian", "Kris Jenner"],
+  includeTerms: ["Quendle", "Robin Quendle"],
   excludeTerms: [],
   matchMode: "phrase",
   expiresAt: null,
@@ -52,7 +52,7 @@ function setHeadline(card, text) {
 function maskFirst(dom) {
   const c1 = dom.window.document.getElementById("c1");
   const { container } = findContainer(c1.querySelector("h3").firstChild, dom.window);
-  overlay.blackout(container, "Kardashians", { window: dom.window });
+  overlay.blackout(container, "Quendle", { window: dom.window });
   const active = new Set([container]);
   return { container, active };
 }
@@ -60,7 +60,7 @@ function maskFirst(dom) {
 const matcher = () => compileMatcher([STARTER]);
 
 test("B(a) page strips our class -> reverify re-applies it", () => {
-  const dom = feedDom("Kim Kardashian spotted downtown");
+  const dom = feedDom("Quendle spotted downtown");
   const { container, active } = maskFirst(dom);
   container.classList.remove(BLACKED); // page re-render strips our class
   assert.ok(!overlay.isIntact(container), "mask broken after strip");
@@ -71,7 +71,7 @@ test("B(a) page strips our class -> reverify re-applies it", () => {
 });
 
 test("B(b) page removes our injected child -> reverify re-attaches it", () => {
-  const dom = feedDom("Kim Kardashian spotted downtown");
+  const dom = feedDom("Quendle spotted downtown");
   const { container, active } = maskFirst(dom);
   container.querySelector(".blackout-ui").remove(); // page removes our node
   assert.ok(!overlay.isIntact(container), "mask broken after child removal");
@@ -82,7 +82,7 @@ test("B(b) page removes our injected child -> reverify re-attaches it", () => {
 });
 
 test("B(c) page replaces a masked card with a fresh clone -> clone masked, old dropped", () => {
-  const dom = feedDom("Kim Kardashian spotted downtown");
+  const dom = feedDom("Quendle spotted downtown");
   const { document } = dom.window;
   const { container, active } = maskFirst(dom);
   assert.ok(overlay.isIntact(container));
@@ -91,19 +91,19 @@ test("B(c) page replaces a masked card with a fresh clone -> clone masked, old d
   const fresh = document.createElement("section");
   fresh.className = "card";
   fresh.id = "c1";
-  setHeadline(fresh, "Kim Kardashian spotted downtown");
+  setHeadline(fresh, "Quendle spotted downtown");
   container.replaceWith(fresh);
 
   assert.equal(reverify(container, matcher(), dom.window, active), "removed");
   assert.ok(!active.has(container), "old node dropped from active");
 
   const { container: freshContainer } = findContainer(fresh.querySelector("h3").firstChild, dom.window);
-  overlay.blackout(freshContainer, "Kardashians", { window: dom.window });
+  overlay.blackout(freshContainer, "Quendle", { window: dom.window });
   assert.ok(overlay.isIntact(fresh), "fresh clone masked");
 });
 
 test("B(d) page reuses a masked node for a non-matching story -> ends unmasked", () => {
-  const dom = feedDom("Kim Kardashian spotted downtown");
+  const dom = feedDom("Quendle spotted downtown");
   const { container, active } = maskFirst(dom);
   assert.ok(overlay.isIntact(container));
 
@@ -116,9 +116,9 @@ test("B(d) page reuses a masked node for a non-matching story -> ends unmasked",
 });
 
 test("containerMatches ignores our own label text", () => {
-  const dom = feedDom("Kim Kardashian spotted downtown");
+  const dom = feedDom("Quendle spotted downtown");
   const { container } = maskFirst(dom);
-  // The profile label "Kardashians" lives in our shadow host; it must not count.
+  // The profile label "Quendle" lives in our shadow host; it must not count.
   setHeadline(container, "A quiet day in local news");
   assert.equal(containerMatches(container, matcher(), dom.window, Date.now()), false);
 });

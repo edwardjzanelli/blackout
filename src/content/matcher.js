@@ -66,18 +66,34 @@ function termToRegExp(term) {
 /**
  * @typedef {Object} CompiledProfile
  * @property {string} id
- * @property {string} name
  * @property {number|null} expiresAt
  * @property {{term: string, re: RegExp}[]} terms include terms kept as entered
  * @property {RegExp|null} exclude
  */
 
 /**
+ * @typedef {Object} Match
+ * @property {string} profileId
+ * @property {string} term the matched include term, exactly as entered
+ */
+
+/**
  * @typedef {Object} Matcher
  * @property {boolean} isEmpty
  * @property {(text: string) => boolean} test quick combined include test (5.1a)
- * @property {(text: string, now: number) => {profileId: string, profileName: string, term: string}|null} match
+ * @property {(text: string, now: number) => Match|null} match
  */
+
+/**
+ * The single source of display text for a match: the include term as the user
+ * entered it. Every surface (card label, whole-page cover) renders this; no
+ * rendering code reads a profile name (design 3.3, 3.6, 6.3).
+ * @param {Match|null} hit
+ * @returns {string}
+ */
+export function displayTerm(hit) {
+  return hit ? hit.term : "";
+}
 
 /**
  * Compile all enabled profiles into one matcher. Expiry is intentionally not
@@ -99,7 +115,6 @@ export function compileMatcher(profiles) {
     if (terms.length === 0) continue;
     compiled.push({
       id: profile.id,
-      name: profile.name,
       expiresAt: profile.expiresAt ?? null,
       terms,
       exclude: termsToRegExp(profile.excludeTerms || []),
@@ -136,7 +151,7 @@ export function compileMatcher(profiles) {
         }
         if (!hitTerm) continue;
         if (c.exclude && c.exclude.test(normalized)) continue; // excludeTerms veto
-        return { profileId: c.id, profileName: c.name, term: hitTerm };
+        return { profileId: c.id, term: hitTerm };
       }
       return null;
     },

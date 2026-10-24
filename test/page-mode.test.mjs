@@ -16,9 +16,9 @@ import * as pageMode from "../src/content/page-mode.js";
 
 const STARTER = {
   id: "k",
-  name: "Kardashians",
+  name: "Quendle",
   enabled: true,
-  includeTerms: ["Kardashian", "Kris Jenner", "Kylie Jenner", "Kendall Jenner"],
+  includeTerms: ["Quendle", "Robin Quendle", "Casey Quendle", "Dana Quendle"],
   excludeTerms: [],
   matchMode: "phrase",
   expiresAt: null,
@@ -39,7 +39,7 @@ function feedDom(total, matching) {
     card.className = "card";
     card.id = `s${i}`;
     const h = document.createElement("h3");
-    h.textContent = i < matching ? `Kim Kardashian story number ${i}` : `Local sports recap number ${i}`;
+    h.textContent = i < matching ? `Quendle story number ${i}` : `Local sports recap number ${i}`;
     card.appendChild(h);
     feed.appendChild(card);
   }
@@ -60,7 +60,7 @@ function maskAll(dom) {
     if (!text.trim() || !m.test(text) || !m.match(text, Date.now())) continue;
     const { container } = findContainer(node.parentElement, dom.window);
     if (!container || active.has(container)) continue;
-    overlay.blackout(container, "Kardashians", { window: dom.window });
+    overlay.blackout(container, "Quendle", { window: dom.window });
     active.add(container);
   }
   return active;
@@ -83,7 +83,7 @@ test("covered at start: Reveal leaves zero card masks", () => {
 
   // Rule 1 covered the page at document_start, before any card was masked.
   pageMode.enterWholePage(new Set());
-  pageCover.coverPage(document, "Kardashian", "Kardashians", { window: dom.window });
+  pageCover.coverPage(document, "Quendle", { window: dom.window });
 
   assert.equal(maskAll(dom).size, 0, "no card masks applied in whole-page mode");
   reveal(document);
@@ -132,7 +132,7 @@ test("Black out again restores the cover with no card masks", () => {
 
   const active = maskAll(dom);
   pageMode.enterWholePage(active);
-  pageCover.coverPage(document, "Kardashian", "Kardashians", { window: dom.window });
+  pageCover.coverPage(document, "Quendle", { window: dom.window });
   const host = document.getElementById("blackout-page-cover");
 
   reveal(document);

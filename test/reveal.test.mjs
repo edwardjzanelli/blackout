@@ -18,14 +18,14 @@ function button(container) {
 test("a card that is an <a> wrapping everything never navigates on Reveal", () => {
   const dom = new JSDOM(
     `<!doctype html><body><div class="feed">` +
-      `<a class="card" id="c1" href="/story"><h3>Kim Kardashian spotted</h3></a>` +
+      `<a class="card" id="c1" href="/story"><h3>Quendle spotted</h3></a>` +
       `<a class="card" href="/two"><h3>Two</h3></a>` +
       `<a class="card" href="/three"><h3>Three</h3></a>` +
       `</div></body>`,
   );
   const { document } = dom.window;
   const card = document.getElementById("c1");
-  overlay.blackout(card, "Kardashians", { window: dom.window });
+  overlay.blackout(card, "Quendle", { window: dom.window });
 
   let navigated = false;
   card.addEventListener("click", (e) => {
@@ -44,10 +44,10 @@ test("a card that is an <a> wrapping everything never navigates on Reveal", () =
 });
 
 test("host is its own top stacking context (beats a stretched-link ::after)", () => {
-  const dom = new JSDOM(`<!doctype html><body><section class="card" id="c">` + `<h3>Kim Kardashian</h3></section></body>`);
+  const dom = new JSDOM(`<!doctype html><body><section class="card" id="c">` + `<h3>Quendle</h3></section></body>`);
   const { document } = dom.window;
   const card = document.getElementById("c");
-  overlay.blackout(card, "Kardashians", { window: dom.window });
+  overlay.blackout(card, "Quendle", { window: dom.window });
   const host = card.querySelector(".blackout-ui");
 
   // jsdom can't hit-test, so assert the properties that make the host topmost
@@ -58,10 +58,10 @@ test("host is its own top stacking context (beats a stretched-link ::after)", ()
 });
 
 test("a page click handler on the card does not fire when Reveal is clicked", () => {
-  const dom = new JSDOM(`<!doctype html><body><section class="card" id="c">` + `<h3>Kim Kardashian</h3></section></body>`);
+  const dom = new JSDOM(`<!doctype html><body><section class="card" id="c">` + `<h3>Quendle</h3></section></body>`);
   const { document } = dom.window;
   const card = document.getElementById("c");
-  overlay.blackout(card, "Kardashians", { window: dom.window });
+  overlay.blackout(card, "Quendle", { window: dom.window });
 
   let pageHandlerFired = false;
   card.addEventListener("click", () => {
@@ -75,17 +75,17 @@ test("a page click handler on the card does not fire when Reveal is clicked", ()
 test("no nesting: a match inside an already masked element does not add a mask", () => {
   const dom = new JSDOM(
     `<!doctype html><body><section class="card" id="outer">` +
-      `<div id="inner"><h3>Kim Kardashian</h3></div></section></body>`,
+      `<div id="inner"><h3>Quendle</h3></div></section></body>`,
   );
   const { document } = dom.window;
   const outer = document.getElementById("outer");
   const inner = document.getElementById("inner");
 
-  overlay.blackout(outer, "Kardashians", { window: dom.window });
+  overlay.blackout(outer, "Quendle", { window: dom.window });
   // An inner match arrives; main.js consults hasMaskedAncestor before masking.
   assert.equal(overlay.hasMaskedAncestor(inner), true);
   // So it must not be masked.
-  if (!overlay.hasMaskedAncestor(inner)) overlay.blackout(inner, "Kardashians", { window: dom.window });
+  if (!overlay.hasMaskedAncestor(inner)) overlay.blackout(inner, "Quendle", { window: dom.window });
 
   assert.equal(document.querySelectorAll(".blackout-ui").length, 1, "exactly one mask");
   assert.equal(inner.classList.contains(BLACKED), false, "inner not masked");
@@ -95,7 +95,7 @@ test("no nesting: a match inside an already masked element does not add a mask",
 test("no nesting: masking an outer element removes any mask inside it, exactly", () => {
   const dom = new JSDOM(
     `<!doctype html><body><section class="card" id="outer">` +
-      `<div id="inner"><h3>Kim Kardashian</h3></div><p>More Kardashian news</p></section></body>`,
+      `<div id="inner"><h3>Quendle</h3></div><p>More Quendle news</p></section></body>`,
   );
   const { document } = dom.window;
   const outer = document.getElementById("outer");
@@ -103,7 +103,7 @@ test("no nesting: masking an outer element removes any mask inside it, exactly",
   const before = outer.innerHTML;
 
   // Inner masked first (e.g. a narrow match), then the whole card matches.
-  overlay.blackout(inner, "Kardashians", { window: dom.window });
+  overlay.blackout(inner, "Quendle", { window: dom.window });
   assert.ok(inner.classList.contains(BLACKED));
 
   // main.js removes inner masks within the outer before masking it.
@@ -112,7 +112,7 @@ test("no nesting: masking an outer element removes any mask inside it, exactly",
   for (const m of removed) overlay.cleanup(m);
   assert.equal(outer.innerHTML, before, "inner mask removed with exact restore");
 
-  overlay.blackout(outer, "Kardashians", { window: dom.window });
+  overlay.blackout(outer, "Quendle", { window: dom.window });
   assert.equal(document.querySelectorAll(".blackout-ui").length, 1, "exactly one mask, on the outer");
   assert.ok(outer.classList.contains(BLACKED));
   assert.equal(inner.classList.contains(BLACKED), false);

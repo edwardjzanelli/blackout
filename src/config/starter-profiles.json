@@ -1,0 +1,11 @@
+[
+  {
+    "id": "starter-1",
+    "enabled": true,
+    "includeTerms": ["Kardashian", "Kris Jenner", "Kylie Jenner", "Kendall Jenner"],
+    "excludeTerms": [],
+    "matchMode": "phrase",
+    "expiresAt": null,
+    "siteScope": []
+  }
+]

@@ -123,12 +123,9 @@ async function buildTarget(name, transform) {
   // never drift out of sync with the code. use_dynamic_url must be false:
   // true serves each module under a distinct, per-fetch URL, which blocks the
   // relative static imports between these modules (the M1 load failure).
+  const graph = await importGraph(CONTENT_ENTRY);
   manifest.web_accessible_resources = [
-    {
-      resources: await importGraph(CONTENT_ENTRY),
-      matches: ["<all_urls>"],
-      use_dynamic_url: false,
-    },
+    { resources: graph, matches: ["<all_urls>"], use_dynamic_url: false },
   ];
 
   await writeFile(
@@ -136,11 +133,14 @@ async function buildTarget(name, transform) {
     JSON.stringify(manifest, null, 2) + "\n",
   );
 
-  // Flip the debug flag in the built copy only; src stays DEBUG = false.
+  // Flip the debug flag in the built copies only; src stays DEBUG = false. All
+  // graph modules share the flag (e.g. storage.js logs its sync fallback).
   if (DEBUG_BUILD) {
-    const mainPath = join(out, CONTENT_ENTRY);
-    const code = await readFile(mainPath, "utf8");
-    await writeFile(mainPath, code.replace("const DEBUG = false;", "const DEBUG = true;"));
+    for (const rel of graph.filter((r) => r.endsWith(".js"))) {
+      const modulePath = join(out, rel);
+      const code = await readFile(modulePath, "utf8");
+      await writeFile(modulePath, code.replace("const DEBUG = false;", "const DEBUG = true;"));
+    }
   }
 
   console.log(`built dist/${name}${DEBUG_BUILD ? " (debug)" : ""}`);

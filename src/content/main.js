@@ -5,7 +5,7 @@
 // re-checked. Our own injected nodes are ignored to avoid recursive matching.
 
 import { loadState, onStateChanged } from "../shared/storage.js";
-import { compileMatcher } from "./matcher.js";
+import { compileMatcher, displayTerm } from "./matcher.js";
 import { findContainer } from "./container.js";
 import { makeCandidateWalker, isSkippable } from "./scan.js";
 import { reverify } from "./durability.js";
@@ -22,7 +22,7 @@ const doc = document;
 
 /** Whole-page blackout state (design 3.6). pageMode holds the either/or state. */
 let prefs = null;
-/** include term (as entered) -> {count, profileName}; for the cover label. */
+/** include term (as entered) -> {count}; picks the most-matched cover term. */
 let termInfo = new Map();
 
 /** Attributes that carry matchable text (design 5.1). */
@@ -201,7 +201,7 @@ function handleCandidate(cacheKey, element, text) {
   if (!container || isOwnNode(container)) {
     processed.set(cacheKey, { hash: h, container: null });
     if (!container) {
-      log(`match profile="${hit.profileName}" term="${hit.term}" text="${snippet(text)}"`);
+      log(`match term="${displayTerm(hit)}" text="${snippet(text)}"`);
       logRefused(decision); // no safe element at all (design 8b)
     }
     return;
@@ -236,14 +236,15 @@ function handleCandidate(cacheKey, element, text) {
     return;
   }
 
-  log(`match profile="${hit.profileName}" term="${hit.term}" text="${snippet(text)}"`);
-  overlay.blackout(container, hit.profileName, { window: win, term: hit.term });
+  const term = displayTerm(hit);
+  log(`match term="${term}" text="${snippet(text)}"`);
+  overlay.blackout(container, term, { window: win });
   overlay.reapply(container); // if a record existed but the page stripped it
   if (firstTime) {
     activeContainers.add(container);
-    storyTerm.set(container, hit.term);
+    storyTerm.set(container, term);
     maskObserver.observe(container, { attributes: true, attributeFilter: ["class"], childList: true });
-    countTerm(hit.term, hit.profileName); // one per masked story (design 3.6)
+    countTerm(term); // one per masked story (design 3.6)
   }
   processed.set(cacheKey, { hash: h, container });
   log(`container masked tag=${container.tagName} role="${roleOf(container)}" size=${sizeOf(container)}`);
@@ -370,9 +371,9 @@ function teardownAll() {
   termInfo = new Map();
 }
 
-/** @param {string} term @param {string} profileName */
-function countTerm(term, profileName) {
-  const info = termInfo.get(term) || { count: 0, profileName };
+/** @param {string} term the include term as entered */
+function countTerm(term) {
+  const info = termInfo.get(term) || { count: 0 };
   info.count += 1;
   termInfo.set(term, info);
 }
@@ -389,8 +390,7 @@ function coverNow(term) {
   maskObserver.disconnect();
   reverifyQueue = [];
   reverifyPending = new WeakSet();
-  const info = termInfo.get(term);
-  pageCover.coverPage(doc, term, info ? info.profileName : "", { window: win });
+  pageCover.coverPage(doc, term, { window: win }); // term is the only rendered text
   log(`page covered term="${term}"`);
 }
 
@@ -403,8 +403,9 @@ function checkRule1() {
     Date.now(),
   );
   if (hit) {
-    countTerm(hit.term, hit.profileName);
-    coverNow(hit.term);
+    const term = displayTerm(hit);
+    countTerm(term);
+    coverNow(term);
   }
 }
 

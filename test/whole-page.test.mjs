@@ -21,9 +21,9 @@ import * as pageCover from "../src/content/page-cover.js";
 
 const STARTER = {
   id: "k",
-  name: "Kardashians",
+  name: "Quendle",
   enabled: true,
-  includeTerms: ["Kardashian", "Kris Jenner", "Kylie Jenner", "Kendall Jenner"],
+  includeTerms: ["Quendle", "Robin Quendle", "Casey Quendle", "Dana Quendle"],
   excludeTerms: [],
   matchMode: "phrase",
   expiresAt: null,
@@ -44,7 +44,7 @@ function feedDom(total, matching) {
     card.className = "card";
     card.id = `s${i}`;
     const h = document.createElement("h3");
-    h.textContent = i < matching ? `Kim Kardashian story number ${i}` : `Local sports recap number ${i}`;
+    h.textContent = i < matching ? `Quendle story number ${i}` : `Local sports recap number ${i}`;
     card.appendChild(h);
     feed.appendChild(card);
   }
@@ -63,7 +63,7 @@ function maskAll(dom) {
     if (!text.trim() || !m.test(text) || !m.match(text, Date.now())) continue;
     const { container } = findContainer(node.parentElement, dom.window);
     if (!container || active.has(container)) continue;
-    overlay.blackout(container, "Kardashians", { window: dom.window });
+    overlay.blackout(container, "Quendle", { window: dom.window });
     active.add(container);
   }
   return active;
@@ -72,19 +72,19 @@ function maskAll(dom) {
 const coverLabel = (doc) => doc.getElementById("blackout-page-cover").shadowRoot.querySelector(".label").textContent;
 
 test("matcher reports the include term as entered, not the matched surface", () => {
-  assert.equal(matcher().match("the Kardashians arrived", Date.now()).term, "Kardashian");
+  assert.equal(matcher().match("the Quendles arrived", Date.now()).term, "Quendle");
 });
 
-test("rule 1: a URL search word (?q=kardashians) matches", () => {
-  const hit = ruleOneTerm(matcher(), { title: "", search: "?q=kardashians" }, Date.now());
+test("rule 1: a URL search word (?q=quendles) matches", () => {
+  const hit = ruleOneTerm(matcher(), { title: "", search: "?q=quendles" }, Date.now());
   assert.ok(hit, "covered by URL");
-  assert.equal(hit.term, "Kardashian");
+  assert.equal(hit.term, "Quendle");
 });
 
 test("rule 1: a matching page title matches", () => {
-  const hit = ruleOneTerm(matcher(), { title: "Kim Kardashian - Google News", search: "" }, Date.now());
+  const hit = ruleOneTerm(matcher(), { title: "Quendle - Google News", search: "" }, Date.now());
   assert.ok(hit);
-  assert.equal(hit.term, "Kardashian");
+  assert.equal(hit.term, "Quendle");
 });
 
 test("rule 1: no title/URL match returns null", () => {
@@ -118,17 +118,17 @@ test("rule 2: a page with no matches is never covered", () => {
 
 test("label uses the include term as entered and the most-matched term", () => {
   const termInfo = new Map([
-    ["Kardashian", { count: 3, profileName: "Kardashians" }],
-    ["Kris Jenner", { count: 5, profileName: "Kardashians" }],
+    ["Quendle", { count: 3 }],
+    ["Robin Quendle", { count: 5 }],
   ]);
-  assert.equal(mostMatchedTerm(termInfo), "Kris Jenner");
+  assert.equal(mostMatchedTerm(termInfo), "Robin Quendle");
 
   const dom = new JSDOM(`<!doctype html><body></body>`);
   pageCover.uncoverPage();
-  pageCover.coverPage(dom.window.document, "Kris Jenner", "Kardashians", { window: dom.window });
+  pageCover.coverPage(dom.window.document, "Robin Quendle", { window: dom.window });
   assert.equal(
     coverLabel(dom.window.document),
-    "Lots of Kris Jenner references on this page, so we blocked out the entire page.",
+    "Lots of Robin Quendle references on this page, so we blocked out the entire page.",
   );
 });
 
@@ -138,7 +138,7 @@ test("cover locks scrolling and restores the previous overflow exactly on Reveal
   document.documentElement.style.overflow = "scroll";
   pageCover.uncoverPage();
 
-  pageCover.coverPage(document, "Kardashian", "Kardashians", { window: dom.window });
+  pageCover.coverPage(document, "Quendle", { window: dom.window });
   assert.equal(document.documentElement.style.overflow, "hidden", "scroll locked while covered");
 
   const host = document.getElementById("blackout-page-cover");
@@ -150,7 +150,7 @@ test("Reveal then Black out again toggles the cover and the scroll lock", () => 
   const dom = new JSDOM(`<!doctype html><body></body>`);
   const { document } = dom.window;
   pageCover.uncoverPage();
-  pageCover.coverPage(document, "Kardashian", "Kardashians", { window: dom.window });
+  pageCover.coverPage(document, "Quendle", { window: dom.window });
   const host = document.getElementById("blackout-page-cover");
 
   host.shadowRoot.querySelector(".reveal").click(); // reveal

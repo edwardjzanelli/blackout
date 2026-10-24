@@ -28,30 +28,35 @@ function profile(overrides) {
 
 const NOW = 1_000_000;
 
+// A fictional term, so the matcher tests carry no real filter term literal.
+const TERM = "Quendle";
+const FULL = "Robin Quendle";
+
 test("matches plural and possessive forms", () => {
-  const m = compileMatcher([profile({ includeTerms: ["Kardashian"] })]);
+  const m = compileMatcher([profile({ includeTerms: [TERM] })]);
   for (const text of [
-    "Kardashian",
-    "kardashian", // case-insensitive
-    "the Kardashians are back",
-    "Kardashian's new show",
-    "Kardashians' empire",
-    "Kardashian’s new show", // curly apostrophe 's
-    "Kardashians’ empire", // curly apostrophe s'
+    TERM,
+    TERM.toLowerCase(), // case-insensitive
+    `the ${TERM}s are back`,
+    `${TERM}'s new show`,
+    `${TERM}s' empire`,
+    `${TERM}’s new show`, // curly apostrophe 's
+    `${TERM}s’ empire`, // curly apostrophe s'
   ]) {
     assert.ok(m.match(text, NOW), `should match: ${text}`);
   }
 });
 
 test("does not match when the term is only a prefix of a longer word", () => {
-  const m = compileMatcher([profile({ includeTerms: ["Kardashian"] })]);
-  assert.equal(m.match("Kardashianize the news", NOW), null);
+  const m = compileMatcher([profile({ includeTerms: [TERM] })]);
+  assert.equal(m.match(`${TERM}ize the news`, NOW), null);
 });
 
 test("a full-name rule does not fire on a bare first name", () => {
-  const m = compileMatcher([profile({ includeTerms: ["Kim Kardashian"] })]);
-  assert.equal(m.match("Kim went to the store", NOW), null);
-  assert.ok(m.match("Kim Kardashian attends a gala", NOW));
+  const m = compileMatcher([profile({ includeTerms: [FULL] })]);
+  const first = FULL.split(" ")[0];
+  assert.equal(m.match(`${first} went to the store`, NOW), null);
+  assert.ok(m.match(`${FULL} attends a gala`, NOW));
 });
 
 test("accented letters are word characters, not boundaries", () => {
@@ -79,20 +84,19 @@ test("expiry is checked at match time", () => {
 
 test("disabled profiles do not match", () => {
   const m = compileMatcher([
-    profile({ includeTerms: ["Kardashian"], enabled: false }),
+    profile({ includeTerms: [TERM], enabled: false }),
   ]);
   assert.ok(m.isEmpty);
-  assert.equal(m.match("Kardashian news", NOW), null);
+  assert.equal(m.match(`${TERM} news`, NOW), null);
 });
 
 test("returns which profile matched", () => {
   const m = compileMatcher([
     profile({ id: "a", name: "Spoilers", includeTerms: ["Survivor"] }),
-    profile({ id: "b", name: "Celebs", includeTerms: ["Kardashian"] }),
+    profile({ id: "b", name: "Celebs", includeTerms: [TERM] }),
   ]);
-  assert.deepEqual(m.match("Kardashian spotted", NOW), {
+  assert.deepEqual(m.match(`${TERM} spotted`, NOW), {
     profileId: "b",
-    profileName: "Celebs",
-    term: "Kardashian",
+    term: TERM,
   });
 });

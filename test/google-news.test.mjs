@@ -17,23 +17,15 @@ import { compileMatcher } from "../src/content/matcher.js";
 import { makeCandidateWalker } from "../src/content/scan.js";
 import { findContainer } from "../src/content/container.js";
 import * as overlay from "../src/content/overlay.js";
+import starterConfig from "../src/config/starter-profiles.json" with { type: "json" };
 
 const here = dirname(fileURLToPath(import.meta.url));
 const BLACKED = "blackout-blacked-out";
 const ATTRS = ["title", "aria-label", "alt"];
 
-const STARTER = {
-  id: "k",
-  name: "Kardashians",
-  enabled: true,
-  includeTerms: ["Kardashian", "Kris Jenner", "Kylie Jenner", "Kendall Jenner"],
-  excludeTerms: [],
-  matchMode: "phrase",
-  expiresAt: null,
-  siteScope: [],
-  createdAt: 0,
-  updatedAt: 0,
-};
+// The fixture is a real saved Google News page, so match it with the real
+// starter profile read from the config (no term literal in this test).
+const STARTER = { ...starterConfig[0], enabled: starterConfig[0].enabled !== false };
 
 async function loadGnews() {
   const html = await readFile(join(here, "fixtures", "google-news-search.html"), "utf8");
@@ -58,10 +50,11 @@ function runPipeline(dom) {
       text = ATTRS.map((a) => node.getAttribute(a)).filter(Boolean).join(" ");
     }
     if (!element || !text.trim() || !matcher.test(text)) continue;
-    if (!matcher.match(text, Date.now())) continue;
+    const hit = matcher.match(text, Date.now());
+    if (!hit) continue;
     const { container } = findContainer(element, dom.window);
     if (!container || active.has(container)) continue;
-    overlay.blackout(container, "Kardashians", { window: dom.window });
+    overlay.blackout(container, hit.term, { window: dom.window });
     active.add(container);
   }
   return active;

@@ -41,7 +41,7 @@ test("a match loose in the body masks the smallest element, not the body", async
 
 test("an input-bearing card is refused but the match's own heading is masked", async () => {
   const dom = new JSDOM(
-    `<!doctype html><body><article id="c"><form><input name="q"></form><h3>Kardashian</h3></article></body>`,
+    `<!doctype html><body><article id="c"><form><input name="q"></form><h3>Topic heading</h3></article></body>`,
   );
   const { document } = dom.window;
   const heading = document.querySelector("#c h3");
@@ -53,7 +53,7 @@ test("an input-bearing card is refused but the match's own heading is masked", a
 });
 
 test("refuses when the only container is page structure (text direct in body)", async () => {
-  const dom = new JSDOM(`<!doctype html><body>Kardashian loose text</body>`);
+  const dom = new JSDOM(`<!doctype html><body>Loose topic text</body>`);
   const { document } = dom.window;
   const decision = findContainer(document.body.firstChild, dom.window);
   assert.equal(decision.container, null);

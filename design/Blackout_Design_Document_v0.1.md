@@ -34,7 +34,7 @@ Initial use cases: suppress Kardashian-related articles; avoid coverage of selec
 - Understanding semantic references with no keyword or metadata match.
 - Guaranteeing coverage of every site, embedded iframe, or shadow-root component.
 - Filtering browser tabs, native mobile apps, email clients, or other browsers.
-- Synchronizing settings between devices or sharing public filter packs.
+- ~~Synchronizing settings between devices~~ **[CHANGED]** sharing public filter packs. **Same-browser sync is in v0.1: profiles and preferences live in the browser's own sync storage (storage.sync), so they follow the user across devices signed in to the same browser (§6.3). Cross-browser sync is not in scope.**
 - **[ADDED]** Safari (macOS and iOS) and Firefox store listings. Code stays portable from day one; these listings follow in v0.2 (see §6a).
 - **[ADDED]** Instagram and LinkedIn feeds as supported targets (best effort only).
 
@@ -59,7 +59,7 @@ Initial use cases: suppress Kardashian-related articles; avoid coverage of selec
 
 Default presentation: an opaque, accessible overlay occupying the content unit's original area, labeled "Content blacked out," with the matching profile name and a Reveal control. Reveal is per unit and lasts until the page reloads; the user can black it out again. Overlays must not leak underlying headlines, image alt text, or link previews on hover. Keyboard activation and visible focus are required.
 
-**3.3a [ADDED]** The label rotates through a short list of snarky lines (for example "Spared you this one." / "You're welcome."), with a preference for the plain "Content blacked out." Profile name stays visible so the user knows which filter fired.
+**3.3a [ADDED] [CHANGED]** The label rotates through a short list of snarky lines (for example "Spared you this one." / "You're welcome."), with a preference for the plain "Content blacked out." ~~Profile name stays visible so the user knows which filter fired.~~ **The label shows the matched filter term exactly as the user entered it (for example "Kardashian"), not a profile name, so the user knows which filter fired. This is the same rule as the whole-page label (§3.6).**
 
 ## 3.4 Temporary spoiler filters
 
@@ -154,11 +154,13 @@ Platform: ~~Chrome Extension Manifest V3~~ **[CHANGED]** WebExtensions Manifest 
 | **[ADDED]** site adapters | Per-site selectors and container rules (§5.4)          |
 | **[ADDED]** build script  | Emits one package per browser from one source tree (§6a) |
 
-Use chrome.storage.local for profiles/preferences and a bounded history for MVP. Prefer minimal permissions: storage, activeTab where useful, and host permissions needed for automatic page scanning. Automatic filtering across websites requires user-granted site access; this should be explained clearly during installation. Avoid broad network permissions and remote code.
+~~Use chrome.storage.local for profiles/preferences and a bounded history for MVP.~~ **[CHANGED]** Use **chrome.storage.sync for profiles and preferences (one item per profile, §6.3), with chrome.storage.local as the fallback on quota errors or when sync is unavailable. Per-device and runtime state (revealed items, counters, a bounded history) stay in chrome.storage.local.** Prefer minimal permissions: storage, activeTab where useful, and host permissions needed for automatic page scanning. Automatic filtering across websites requires user-granted site access; this should be explained clearly during installation. Avoid broad network permissions and remote code.
 
 **6.1 [ADDED]** The service worker may not be needed at all. Expiry can be checked by the content script at match time (`expiresAt < now` means skip), which is exact and needs no alarms. Only the popup badge count needs a background context. Fewer moving parts, and one less thing that differs between browsers.
 
 **6.2 [ADDED] [PROPOSED] Language and repo.** Plain JavaScript (ES modules), HTML and CSS, with JSDoc type comments; no framework and no bundler, so the shipped code is the code that was written (readable for store review, §9a). Node is used only for development tooling: the per-browser build script (§6a) and tests. Repo root `c:\work\blackout\blackout`; anything not in the repo (store assets in progress, notes, credentials) lives in `c:\work\blackout`.
+
+**6.3 [ADDED] Filter terms and storage.** Filter terms are user data stored in the browser's own sync storage (storage.sync), so they follow the user across devices signed in to the same browser. src/config/starter-profiles.json holds starter defaults only, used to seed sync once; no term is hard-coded elsewhere, and no text is generated from a term (no pluralizing).
 
 ## 6a. [ADDED] Browser support: single source, browser-specific where forced
 
@@ -206,6 +208,8 @@ Special cases: small inline mentions should use text-range masking rather than a
 The injected child lives in a shadow root so the site's CSS cannot restyle the label. One caveat: the container may need `position: relative` for the label, which can affect absolutely positioned descendants on some sites; the adapter can opt out per site.
 
 **8b. [ADDED] [CHANGED]** Inline text-range masking (§13, last question) is P1. ~~For v0.1 a match with no safe container is skipped and counted, not masked.~~ **A matched word is never left visible. Where no safe card container exists (topic chips, "Follow this topic" links, section headings, sidebar entries), mask the smallest element that contains the match, its own link, chip, heading or span, using the same §8a mechanism. The size, inputs and forbidden-boundary rules still apply to that element, so never `<main>`, `<body>`, feeds or nav containers themselves; a link or chip inside nav is fine.**
+
+**8c. [ADDED]** The mask UI is responsive to the masked element's size, using CSS container queries inside the shadow root (no JavaScript layout loop): a tall card shows the stacked label, term and Reveal; a shorter one shows the term and Reveal in a row; shorter or narrower still drops the label first, then the term. The Reveal button (and "Black out again") is never dropped and is never clipped: it keeps a minimum clickable height of 24 px with readable text. If a masked element is shorter than that minimum, its `min-height` is grown just enough to fit the button, the one accepted layout change on the page element; the previous value is recorded and restored exactly on Reveal and on cleanup.
 
 # 9. Security, privacy, and accessibility
 

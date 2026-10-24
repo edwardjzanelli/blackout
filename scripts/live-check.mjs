@@ -19,7 +19,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const extensionPath = join(root, "dist", "chrome");
 const argv = process.argv.slice(2);
 const revealMode = argv.includes("--reveal");
-const TARGET = argv.find((a) => !a.startsWith("--")) || "https://news.google.com/search?q=Kardashian";
+// The URL is an argument; no filter term is baked into the default (design 6.3).
+const TARGET = argv.find((a) => !a.startsWith("--")) || "https://news.google.com/";
 const SETTLE_MS = 20_000;
 
 const logLines = [];

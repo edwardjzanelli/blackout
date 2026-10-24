@@ -10,7 +10,7 @@ import { repeatedGroup } from "./container.js";
  * @param {import("./matcher.js").Matcher} matcher
  * @param {{title?: string, search?: string}} page URL search string and title
  * @param {number} now
- * @returns {{profileId: string, profileName: string, term: string}|null}
+ * @returns {import("./matcher.js").Match|null}
  */
 export function ruleOneTerm(matcher, page, now) {
   if (!matcher || matcher.isEmpty) return null;
@@ -81,7 +81,7 @@ export function shouldCoverByStories(counts, prefs) {
 
 /**
  * The include term with the highest match count on the page (design 3.6).
- * @param {Map<string, {count: number, profileName: string}>} termInfo
+ * @param {Map<string, {count: number}>} termInfo
  * @returns {string|null}
  */
 export function mostMatchedTerm(termInfo) {
