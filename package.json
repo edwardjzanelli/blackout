@@ -1,0 +1,12 @@
+{
+  "name": "blackout",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser extension that blacks out unwanted topics, people and spoilers on web pages.",
+  "scripts": {
+    "icons": "node scripts/gen-icons.mjs",
+    "build": "node scripts/build.mjs",
+    "test": "npm run build && node --test"
+  }
+}
