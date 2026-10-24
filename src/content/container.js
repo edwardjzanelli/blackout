@@ -137,12 +137,24 @@ function refused(reason, el) {
  * (design 8b). Every ancestor below the boundary is evaluated before refusing;
  * refusal only happens when even the matched element is a forbidden boundary or
  * otherwise unsafe.
+ *
+ * extraUnits adds a site adapter's content-unit selectors (design 5.4), e.g.
+ * YouTube's `ytd-video-renderer`, so those count as explicit content units
+ * alongside the generic article/li/[role=article].
  * @param {Node} startNode
  * @param {Window} [win]
+ * @param {string} [extraUnits] adapter unit selectors, comma-joined
  * @returns {ContainerDecision}
  */
-export function findContainer(startNode, win = globalThis) {
+export function findContainer(startNode, win = globalThis, extraUnits = "") {
   const doc = win.document || (startNode.ownerDocument ?? document);
+  const unitSelector = extraUnits ? `${CONTENT_UNIT_SELECTOR}, ${extraUnits}` : CONTENT_UNIT_SELECTOR;
+  // With a site adapter the real content units are named (ytd-video-renderer,
+  // role=article, ...), so the generic card-class and repeated-DIV guesses are
+  // off: they only over-capture a site's layout DIVs (e.g. swallowing a whole
+  // YouTube shelf). A match outside every named unit falls to the smallest safe
+  // element. Generic sites (no adapter) keep the heuristics (design 5.1, 5.4).
+  const adapterSite = extraUnits !== "";
   let el = startNode.nodeType === 3 ? startNode.parentElement : /** @type {Element} */ (startNode);
 
   /** Nearest safe card-like block by class name. */
@@ -160,7 +172,7 @@ export function findContainer(startNode, win = globalThis) {
     if (role && UNSAFE_ROLES.has(role)) {
       return finalize(cardLike, repeated, smallest, "forbidden-role", el);
     }
-    if (el.matches(CONTENT_UNIT_SELECTOR)) {
+    if (el.matches(unitSelector)) {
       // Nearest explicit unit: use it if safe, otherwise a bigger ancestor is
       // only worse, so stop with whatever generic candidate we have found.
       const reason = safetyReason(el, win);
@@ -169,8 +181,10 @@ export function findContainer(startNode, win = globalThis) {
     }
     if (!safetyReason(el, win)) {
       if (!smallest) smallest = el; // nearest safe element = smallest
-      if (!cardLike && isCardLike(el)) cardLike = el;
-      if (isRepeatedItem(el)) repeated = el; // overwrite: ends as the highest
+      if (!adapterSite) {
+        if (!cardLike && isCardLike(el)) cardLike = el;
+        if (isRepeatedItem(el)) repeated = el; // overwrite: ends as the highest
+      }
     }
     el = el.parentElement;
   }

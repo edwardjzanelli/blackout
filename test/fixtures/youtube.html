@@ -1,0 +1,64 @@
+<!doctype html>
+<!-- Synthetic YouTube results page. Reproduces YouTube's custom-element names
+     and nesting (ytd-app > ... > ytd-item-section-renderer > #contents >
+     ytd-video-renderer, and a ytd-reel-shelf-renderer of
+     ytm-shorts-lockup-view-model). All names and text are invented; no real
+     person, channel, link or thumbnail. "Mirelle Vossen" is the match target. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>synthetic youtube</title>
+  </head>
+  <body>
+    <ytd-app>
+      <div id="page-manager">
+        <ytd-search>
+          <ytd-item-section-renderer>
+            <div id="contents">
+              <ytd-video-renderer>
+                <div id="dismissible">
+                  <a id="thumbnail" href="/watch?v=aaa" aria-label="thumbnail"></a>
+                  <div class="text-wrapper">
+                    <h3><a href="/watch?v=aaa">Mirelle Vossen live set, full show</a></h3>
+                    <yt-formatted-string>Tundra Sound</yt-formatted-string>
+                  </div>
+                </div>
+              </ytd-video-renderer>
+              <ytd-video-renderer>
+                <div id="dismissible">
+                  <a id="thumbnail" href="/watch?v=bbb" aria-label="thumbnail"></a>
+                  <div class="text-wrapper">
+                    <h3><a href="/watch?v=bbb">Sourdough baking for beginners</a></h3>
+                    <yt-formatted-string>Flour and Water</yt-formatted-string>
+                  </div>
+                </div>
+              </ytd-video-renderer>
+              <ytd-video-renderer>
+                <div id="dismissible">
+                  <a id="thumbnail" href="/watch?v=ccc" aria-label="thumbnail"></a>
+                  <div class="text-wrapper">
+                    <h3><a href="/watch?v=ccc">Kayaking the quiet fjords</a></h3>
+                    <yt-formatted-string>Paddle North</yt-formatted-string>
+                  </div>
+                </div>
+              </ytd-video-renderer>
+            </div>
+          </ytd-item-section-renderer>
+
+          <ytd-reel-shelf-renderer>
+            <div id="contents">
+              <ytm-shorts-lockup-view-model>
+                <a href="/shorts/s1"></a>
+                <h3><a href="/shorts/s1">Mirelle Vossen backstage, sixty seconds</a></h3>
+              </ytm-shorts-lockup-view-model>
+              <ytm-shorts-lockup-view-model>
+                <a href="/shorts/s2"></a>
+                <h3><a href="/shorts/s2">Puppy learns to climb stairs</a></h3>
+              </ytm-shorts-lockup-view-model>
+            </div>
+          </ytd-reel-shelf-renderer>
+        </ytd-search>
+      </div>
+    </ytd-app>
+  </body>
+</html>

@@ -1,0 +1,34 @@
+<!doctype html>
+<!-- Synthetic Facebook home feed. Reproduces Facebook's ARIA structure
+     (role=main > role=feed > role=article posts, each with aria-posinset and an
+     "Actions for this post" menu button), which is what the adapter anchors on
+     since the class names are obfuscated. All names and text are invented; no
+     real person, post, link or avatar. "Mirelle Vossen" is the match target. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Facebook</title>
+  </head>
+  <body>
+    <div role="banner">Synthetic chrome</div>
+    <div role="main">
+      <div role="feed" aria-label="Posts">
+        <div role="article" aria-posinset="1" aria-label="Post by Mirelle Vossen">
+          <div><span><strong>Mirelle Vossen</strong></span></div>
+          <div><span>Mirelle Vossen just announced a surprise world tour.</span></div>
+          <div aria-label="Actions for this post" role="button" tabindex="0">More</div>
+        </div>
+        <div role="article" aria-posinset="2" aria-label="Post by Harbor Bakery">
+          <div><span><strong>Harbor Bakery</strong></span></div>
+          <div><span>Fresh loaves out of the oven every morning this week.</span></div>
+          <div aria-label="Actions for this post" role="button" tabindex="0">More</div>
+        </div>
+        <div role="article" aria-posinset="3" aria-label="Post by City Transit">
+          <div><span><strong>City Transit</strong></span></div>
+          <div><span>Weekend track work on the east line, plan ahead.</span></div>
+          <div aria-label="Actions for this post" role="button" tabindex="0">More</div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

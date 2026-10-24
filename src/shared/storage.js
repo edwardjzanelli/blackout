@@ -15,7 +15,7 @@ import starterConfig from "../config/starter-profiles.json" with { type: "json" 
 const DEBUG = false;
 
 /** Bump when the persisted shape changes; migrations branch on this (7a). */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 const PROFILE_PREFIX = "profile:";
 const PREFERENCES_KEY = "preferences";
@@ -52,6 +52,7 @@ const COUNTERS_KEY = "counters";
  * @property {boolean} snarkyLabels
  * @property {number} pageCoverRatio fraction of stories that must match (3.6)
  * @property {number} pageCoverMinMatches minimum matching stories (3.6)
+ * @property {number} pageCoverMaxRefs cover when references exceed this (3.6)
  */
 
 /**
@@ -78,6 +79,7 @@ function defaultPreferences() {
     snarkyLabels: false,
     pageCoverRatio: 0.5,
     pageCoverMinMatches: 6,
+    pageCoverMaxRefs: 10,
   };
 }
 
@@ -96,6 +98,12 @@ function migratePreferences(preferences, fromVersion) {
     }
     if (typeof preferences.pageCoverMinMatches !== "number") {
       preferences.pageCoverMinMatches = 6;
+      changed = true;
+    }
+  }
+  if (fromVersion < 4) {
+    if (typeof preferences.pageCoverMaxRefs !== "number") {
+      preferences.pageCoverMaxRefs = 10;
       changed = true;
     }
   }

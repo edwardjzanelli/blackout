@@ -1,0 +1,30 @@
+<!doctype html>
+<!-- Synthetic Instagram page. Reproduces both shapes the adapter targets: a feed
+     <article> post, and an explore/search grid of tiles that are links to a post
+     or reel permalink (a[role=link][href*="/p/"] or "/reel/") whose caption lives
+     in the image's alt text. All handles and text are invented; no real person,
+     photo, caption or link. "Mirelle Vossen" is the match target. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Instagram</title>
+  </head>
+  <body>
+    <main>
+      <article>
+        <header><a href="/mirellev/" role="link">mirellev</a></header>
+        <div><img alt="Photo by Mirelle Vossen on the pier at sunset" /></div>
+        <section><span>Mirelle Vossen is having the best week.</span></section>
+      </article>
+
+      <div>
+        <div>
+          <a role="link" href="/p/aaa111/"><img alt="Mirelle Vossen on the main stage" /></a>
+          <a role="link" href="/p/bbb222/"><img alt="A bowl of handmade pasta" /></a>
+          <a role="link" href="/reel/ccc333/"><img alt="Mirelle Vossen rehearsal reel" /></a>
+          <a role="link" href="/p/ddd444/"><img alt="Sunrise over the harbor" /></a>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

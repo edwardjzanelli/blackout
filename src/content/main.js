@@ -16,7 +16,15 @@ import { compileMatcher, displayTerm } from "./matcher.js";
 import { findContainer } from "./container.js";
 import { makeCandidateWalker, isSkippable } from "./scan.js";
 import { reverify } from "./durability.js";
-import { ruleOneTerm, storyCounts, shouldCoverByStories, mostMatchedTerm } from "./whole-page.js";
+import {
+  ruleOneTerm,
+  storyCounts,
+  shouldCoverByStories,
+  shouldCoverByRefs,
+  mostMatchedTerm,
+} from "./whole-page.js";
+import { watchNavigation } from "./navwatch.js";
+import { unitSelectorFor } from "../adapters/index.js";
 import { storyKey, isRevealed, reset as resetRevealed } from "./revealed.js";
 import * as pageCover from "./page-cover.js";
 import * as pageMode from "./page-mode.js";
@@ -31,6 +39,19 @@ const doc = document;
 let prefs = null;
 /** include term (as entered) -> {count}; picks the most-matched cover term. */
 let termInfo = new Map();
+/** The active site adapter's content-unit selectors (design 5.4), or "". */
+let unitSelectors = "";
+
+/**
+ * References to filter terms seen so far (design 3.6 rule 2): distinct elements
+ * that own a match. Each element counts once; our own nodes never count. Only
+ * grows while scanning, so the cover never flips back mid-scroll.
+ */
+let refElements = new WeakSet();
+let refCount = 0;
+
+/** Cleanup for the in-page navigation watch (SPA URL changes). */
+let navCleanup = null;
 
 /** Attributes that carry matchable text (design 5.1). */
 const ATTRS = ["title", "aria-label", "alt"];
@@ -203,7 +224,12 @@ function handleCandidate(cacheKey, element, text) {
     return;
   }
 
-  const decision = findContainer(element, win);
+  // This element owns a match: count it once as a reference (design 3.6 rule 2),
+  // whatever happens to its container below, and tally its term for the cover
+  // label.
+  countReference(element, displayTerm(hit));
+
+  const decision = findContainer(element, win, unitSelectors);
   const container = decision.container;
 
   if (!container || isOwnNode(container)) {
@@ -252,7 +278,6 @@ function handleCandidate(cacheKey, element, text) {
     activeContainers.add(container);
     storyTerm.set(container, term);
     maskObserver.observe(container, { attributes: true, attributeFilter: ["class"], childList: true });
-    countTerm(term); // one per masked story (design 3.6)
     recordBlocked(); // one distinct story blocked (FR-12)
   }
   processed.set(cacheKey, { hash: h, container });
@@ -378,6 +403,8 @@ function teardownAll() {
   resetRevealed();
   storyTerm = new WeakMap();
   termInfo = new Map();
+  refElements = new WeakSet();
+  refCount = 0;
 }
 
 /** @param {string} term the include term as entered */
@@ -385,6 +412,20 @@ function countTerm(term) {
   const info = termInfo.get(term) || { count: 0 };
   info.count += 1;
   termInfo.set(term, info);
+}
+
+/**
+ * Count one reference to a filter term (design 3.6 rule 2): the owning element,
+ * once, and its term for the cover label. Only grows, so the cover never flips
+ * back as the page scrolls.
+ * @param {Element|null} element the element that owns the match
+ * @param {string} term the include term as entered
+ */
+function countReference(element, term) {
+  if (!element || refElements.has(element)) return;
+  refElements.add(element);
+  refCount += 1;
+  if (term) countTerm(term);
 }
 
 /**
@@ -404,9 +445,24 @@ function coverNow(term) {
   log(`page covered term="${term}"`);
 }
 
+/**
+ * Debug-only escape hatch so a live check can exercise per-card masking on pages
+ * that would otherwise be covered whole (scripts/live-check.mjs --no-page-rule).
+ * Gated behind DEBUG, so a normal build never reads it (design 3.6).
+ * @returns {boolean}
+ */
+function pageRulesDisabled() {
+  if (!DEBUG) return false;
+  try {
+    return win.localStorage.getItem("blackout:no-page-rule") === "1";
+  } catch {
+    return false;
+  }
+}
+
 /** Rule 1: title or URL search word matches a filter (design 3.6). */
 function checkRule1() {
-  if (pageMode.inWholePage() || paused || !matcher || matcher.isEmpty) return;
+  if (pageMode.inWholePage() || paused || !matcher || matcher.isEmpty || pageRulesDisabled()) return;
   const hit = ruleOneTerm(
     matcher,
     { title: doc.title || "", search: win.location.search || "" },
@@ -419,10 +475,13 @@ function checkRule1() {
   }
 }
 
-/** Rule 2: enough detected stories match (design 3.6). */
+/** Rule 2: enough detected stories match, or enough references appear (3.6). */
 function checkRule2() {
-  if (pageMode.inWholePage() || paused || !prefs) return;
-  if (shouldCoverByStories(storyCounts(activeContainers), prefs)) {
+  if (pageMode.inWholePage() || paused || !prefs || pageRulesDisabled()) return;
+  if (
+    shouldCoverByStories(storyCounts(activeContainers), prefs) ||
+    shouldCoverByRefs(refCount, prefs)
+  ) {
     coverNow(mostMatchedTerm(termInfo));
   }
 }
@@ -490,10 +549,30 @@ async function reevaluate() {
   const [state, device] = await Promise.all([loadState(), loadDeviceState()]);
   prefs = state.preferences;
   paused = isPaused(device, win.location.hostname || "");
+  unitSelectors = unitSelectorFor(win.location.hostname || "");
   matcher = compileMatcher(state.profiles);
   teardownAll();
   processed = new WeakMap();
   refusalLogged = new WeakSet();
+  checkRule1();
+  scanAll();
+}
+
+/**
+ * An in-page navigation changed the URL without a document load (SPAs, design
+ * 5.3a/5.4). Facebook reaches its search results this way and its only match
+ * signal is the ?q= in the URL, so rule 1 must be re-evaluated against the new
+ * URL. Drop any cover or masks with an exact restore, forget processed nodes,
+ * then re-decide rule 1 and re-scan: this covers a newly-matching page and
+ * leaves whole-page mode when the new page no longer qualifies (design 3.6).
+ */
+function onUrlChange() {
+  if (paused) return;
+  unitSelectors = unitSelectorFor(win.location.hostname || "");
+  teardownAll();
+  processed = new WeakMap();
+  refusalLogged = new WeakSet();
+  log("in-page navigation; re-evaluating");
   checkRule1();
   scanAll();
 }
@@ -505,11 +584,13 @@ async function init() {
     `profiles loaded: ${state.profiles.length}${state.seeded ? " (seeded starter profile)" : ""}`,
   );
   paused = isPaused(device, win.location.hostname || "");
+  unitSelectors = unitSelectorFor(win.location.hostname || "");
   matcher = compileMatcher(state.profiles);
 
   startObserver();
   onStateChanged(reevaluate);
   onDeviceStateChanged(refreshPause); // popup pause toggles re-evaluate here
+  if (!navCleanup) navCleanup = watchNavigation(win, onUrlChange); // SPA URL changes
 
   // Answer the popup's "blocked on this page" request (design 3.1).
   const api = globalThis.browser ?? globalThis.chrome;

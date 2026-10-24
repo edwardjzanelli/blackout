@@ -3,6 +3,10 @@
 // (enough detected stories match), and which term labels the cover.
 
 import { repeatedGroup } from "./container.js";
+import { makeCandidateWalker } from "./scan.js";
+
+/** Attributes that carry matchable text and so make an element a reference. */
+const REF_ATTRS = ["title", "aria-label", "alt"];
 
 /**
  * Rule 1: does the page title or any URL search word match an active filter?
@@ -67,8 +71,8 @@ export function storyCounts(maskedContainers) {
 }
 
 /**
- * Rule 2: cover when more than pageCoverRatio of detected stories match and at
- * least pageCoverMinMatches do (design 3.6).
+ * Rule 2, first half: cover when more than pageCoverRatio of detected stories
+ * match and at least pageCoverMinMatches do (design 3.6).
  * @param {{total: number, matched: number}} counts
  * @param {{pageCoverRatio?: number, pageCoverMinMatches?: number}} prefs
  * @returns {boolean}
@@ -77,6 +81,54 @@ export function shouldCoverByStories(counts, prefs) {
   const ratio = typeof prefs.pageCoverRatio === "number" ? prefs.pageCoverRatio : 0.5;
   const min = typeof prefs.pageCoverMinMatches === "number" ? prefs.pageCoverMinMatches : 6;
   return counts.matched >= min && counts.matched > counts.total * ratio;
+}
+
+/**
+ * Rule 2, second half (design 3.6): cover when more than pageCoverMaxRefs
+ * references to filter terms appear on the page, even if no cards were
+ * recognised. A reference is one element that owns a match; see countReferences.
+ * @param {number} refCount distinct reference elements seen so far
+ * @param {{pageCoverMaxRefs?: number}} prefs
+ * @returns {boolean}
+ */
+export function shouldCoverByRefs(refCount, prefs) {
+  const max = typeof prefs.pageCoverMaxRefs === "number" ? prefs.pageCoverMaxRefs : 10;
+  return refCount > max;
+}
+
+/**
+ * Count references to filter terms under root: distinct elements that own a
+ * match in their own text or in a title/aria-label/alt attribute. Each element
+ * counts once even if several of its attributes (and its text) match. Our own
+ * injected nodes never count. This is the spec the content script mirrors
+ * incrementally as it scans (design 3.6 rule 2).
+ * @param {Node} root
+ * @param {import("./matcher.js").Matcher} matcher
+ * @param {Window} win
+ * @param {(node: Node) => boolean} [isOwn] true for the extension's own nodes
+ * @param {number} [now]
+ * @returns {number}
+ */
+export function countReferences(root, matcher, win, isOwn, now = Date.now()) {
+  if (!matcher || matcher.isEmpty) return 0;
+  const owners = new Set();
+  const walker = makeCandidateWalker(win.document, root, isOwn || (() => false));
+  let node;
+  while ((node = walker.nextNode())) {
+    let owner = null;
+    let text = "";
+    if (node.nodeType === 3) {
+      owner = node.parentElement;
+      text = node.nodeValue || "";
+    } else if (node.nodeType === 1) {
+      owner = /** @type {Element} */ (node);
+      text = REF_ATTRS.map((a) => owner.getAttribute(a)).filter(Boolean).join(" ");
+    }
+    if (!owner || !text.trim()) continue;
+    if (isOwn && isOwn(owner)) continue;
+    if (matcher.test(text) && matcher.match(text, now)) owners.add(owner);
+  }
+  return owners.size;
 }
 
 /**
