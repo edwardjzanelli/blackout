@@ -1,0 +1,82 @@
+/* Follows the system light/dark theme via system colors + color-scheme. */
+:root {
+  color-scheme: light dark;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: Canvas;
+  color: CanvasText;
+}
+#blackout-options {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 16px 20px 40px;
+}
+h1 {
+  font-size: 20px;
+  margin: 8px 0 4px;
+}
+.intro {
+  margin: 0 0 16px;
+  opacity: 0.8;
+}
+.block-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+label {
+  font-weight: 600;
+}
+textarea {
+  font: inherit;
+  padding: 8px 10px;
+  min-height: 7.5em;
+  resize: vertical;
+  border: 1px solid GrayText;
+  border-radius: 6px;
+  background: Field;
+  color: FieldText;
+}
+.hint {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.7;
+}
+.warning {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: Mark;
+  color: MarkText;
+}
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+.saved {
+  opacity: 0.8;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+  padding: 6px 16px;
+  border: 1px solid GrayText;
+  border-radius: 6px;
+  background: ButtonFace;
+  color: ButtonText;
+}
+button.primary {
+  border-color: Highlight;
+}
+button:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
+}

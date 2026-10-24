@@ -4,11 +4,24 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Blackout settings</title>
+    <link rel="stylesheet" href="options.css" />
   </head>
   <body>
-    <!-- Settings dashboard: filters, statistics, preferences (design 3.2). Stub for M0. -->
-    <h1>Blackout settings</h1>
-    <p>Settings coming soon.</p>
+    <main id="blackout-options">
+      <h1>Blackout</h1>
+      <p class="intro">Everything stays on your device and syncs across your signed-in browsers. Nothing is sent to a server.</p>
+
+      <form id="block-form" class="block-form">
+        <label for="block-list">Block these (one term per line)</label>
+        <textarea id="block-list" rows="5" spellcheck="false" autocomplete="off"></textarea>
+        <p id="broad-warning" class="warning" role="alert" hidden></p>
+        <p class="hint">A temporary filter is just a line. Delete the line and Save when you are done with it.</p>
+        <div class="form-actions">
+          <button type="submit" class="primary">Save</button>
+          <span id="saved-note" class="saved" role="status" hidden>Saved</span>
+        </div>
+      </form>
+    </main>
     <script type="module" src="options.js"></script>
   </body>
 </html>
