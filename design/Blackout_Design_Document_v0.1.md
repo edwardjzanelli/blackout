@@ -36,7 +36,7 @@ Initial use cases: suppress Kardashian-related articles; avoid coverage of selec
 - Filtering browser tabs, native mobile apps, email clients, or other browsers.
 - ~~Synchronizing settings between devices~~ **[CHANGED]** sharing public filter packs. **Same-browser sync is in v0.1: profiles and preferences live in the browser's own sync storage (storage.sync), so they follow the user across devices signed in to the same browser (§6.3). Cross-browser sync is not in scope.**
 - **[ADDED]** Safari (macOS and iOS) and Firefox store listings. Code stays portable from day one; these listings follow in v0.2 (see §6a).
-- **[ADDED]** Instagram and LinkedIn feeds as supported targets (best effort only).
+- ~~**[ADDED]** Instagram and LinkedIn feeds as supported targets (best effort only).~~ **[CHANGED]** Instagram is a v0.1 target (§5.4); LinkedIn feeds stay best effort only.
 
 # 3. User experience
 
@@ -74,9 +74,11 @@ Automatic filtering needs access to all sites, and Chrome shows that as "Read an
 
 **3.6 [ADDED] Whole-page blackout.** When a page is mostly blocked content, Blackout covers the whole window instead of blacking out every story. The cover uses the same mechanism as a card mask (§8a): label, profile name, **Reveal**, **Black out again**. Reveal lasts until the page reloads. The label reads "Lots of *term* references on this page, so we blocked out the entire page.", where *term* is the filter term exactly as the user entered it, choosing the most frequently matched one when several match. The whole page is covered when either:
 1. the page title or the URL's search words match an active filter, or
-2. more than half of the detected stories on the page match, with at least 6 matching.
+2. ~~more than half of the detected stories on the page match, with at least 6 matching.~~ **[CHANGED]** more than half of the detected stories on the page match, with at least 6 matching, or more than 10 references to filter terms appear on the page.
 
-Both thresholds (half, 6) are preferences, so they can be tuned later. **[ADDED]** Whole-page and per-card blackout are either/or: once a page is in whole-page mode, Reveal shows it completely unmasked, and Black out again restores the whole-page cover.
+**[ADDED]** A reference is a distinct element that owns a match in its own text, `alt`, `aria-label` or `title`; each element counts once however many of its attributes match, masked and unmasked references both count, and the extension's own injected nodes never count. The count only grows as the page loads and scrolls, so once it passes the threshold the cover stays up. The reference rule covers pages whose matches are not organised into recognisable cards (for example a Facebook search page whose title stays "Facebook").
+
+~~Both thresholds (half, 6) are preferences, so they can be tuned later.~~ **[CHANGED]** The thresholds are preferences, so they can be tuned later: `pageCoverRatio` (half), `pageCoverMinMatches` (6) and `pageCoverMaxRefs` (10). **[ADDED]** Whole-page and per-card blackout are either/or: once a page is in whole-page mode, Reveal shows it completely unmasked, and Black out again restores the whole-page cover.
 
 # 4. Functional requirements
 
@@ -95,7 +97,7 @@ Both thresholds (half, 6) are preferences, so they can be tuned later. **[ADDED]
 | FR-11 | Semantic/image recognition                            | Later    |
 | FR-12 | **[ADDED]** Blocked-item counter (page, today, all time) | P0    |
 | FR-13 | **[ADDED]** First-run page with permission explanation and starter profile | P0 |
-| FR-14 | **[ADDED]** Site adapters for Google News, YouTube, Facebook (§5.4) | P0 |
+| FR-14 | ~~**[ADDED]** Site adapters for Google News, YouTube, Facebook (§5.4)~~ **[CHANGED]** Site adapters for Google News, YouTube, Facebook and Instagram (§5.4) | P0 |
 | FR-15 | **[ADDED]** Single-source build that emits per-browser packages (§6a) | P0 (Chrome), P1 (Firefox, Safari) |
 | FR-16 | **[ADDED]** Exclusion terms per profile (UI for the existing `excludeTerms`) | P1 |
 | FR-17 | **[ADDED]** Whole-page blackout per §3.6 | P0 |
@@ -136,9 +138,10 @@ Google News alone will not convince anyone. People install this after seeing a c
 | Google News | article cards | Ed's original test target |
 | YouTube | video tiles (home, search, sidebar), Shorts shelf | Custom elements; titles are in light DOM, so reachable |
 | Facebook | feed posts | Markup is obfuscated and changes often; anchor on ARIA roles, not class names. Highest maintenance cost |
+| **[ADDED]** Instagram | feed `article` posts, and explore/search grid tiles (links to a post or reel permalink) | Captions live in the image `alt` text, so a match often lands on an `<img alt>`; anchor on the role and the permalink `href`, not class names |
 | Generic | `article`, `[role=article]`, `li` cards | Fallback heuristics from §5.1 |
 
-Instagram and LinkedIn are best effort in v0.1. Each site adapter is a small file of selectors and container rules, so adding a site is a data change, not an engine change.
+~~Instagram and LinkedIn are best effort in v0.1.~~ **[CHANGED]** LinkedIn is best effort in v0.1; Instagram is a target (above). Each site adapter is a small file of selectors and container rules, so adding a site is a data change, not an engine change.
 
 # 6. Technical architecture
 
