@@ -10,6 +10,11 @@ spoilers on web pages. The design lives in
 - Never mention any other project or employer anywhere: not in code, docs,
   comments, metadata, or commit messages.
 
+## Product name
+- User-facing name is **Diskard**; internal name is **Blackout**. Never show
+  "Blackout" to users; never rename internal identifiers, storage keys or
+  classes to Diskard.
+
 ## Language and dependencies
 - Plain JavaScript (ES modules), HTML and CSS, with JSDoc type comments. No
   framework, no bundler, no minification, no runtime dependencies.

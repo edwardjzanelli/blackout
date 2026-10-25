@@ -1,4 +1,4 @@
-# Blackout (working name, see §14)
+# Blackout (internal name) / Diskard (product name)
 
 Product and Technical Design • Version 0.1 • October 23, 2026
 
@@ -311,6 +311,8 @@ Recommendation: use a single default blackout behavior, allow reveal, store mini
 - Launch copy: the code is neutral, but naming a politician in the launch post is what will be read as political. Kardashians and spoilers carry the joke without that.
 
 # 14. [ADDED] Name
+
+**[CHANGED] Decided: the product name is Diskard.** The internal name stays Blackout (repo, folder, package, identifiers, storage keys, CSS classes, log prefix); only user-facing strings say Diskard. No domain for v0.1: the website and privacy policy live at edzanelli.com/diskard. The candidate list below is kept for the record.
 
 Avoid real people's names in the product name (store trademark/impersonation rules, and it narrows the product). Check the Chrome Web Store and a trademark search for each before choosing; none of these have been checked yet.
 
