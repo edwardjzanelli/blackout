@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Browser extension that blacks out unwanted topics, people and spoilers on web pages.",
   "scripts": {
-    "icons": "node scripts/gen-icons.mjs",
+    "icons": "node scripts/icons.mjs",
     "build": "node scripts/build.mjs",
     "live-check": "node scripts/live-check.mjs",
     "test": "npm run build && node --test test/"

@@ -8,7 +8,6 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const srcDir = join(root, "src");
-const iconsDir = join(root, "icons");
 const distDir = join(root, "dist");
 
 /** The module dynamic-imported by the content-script loader (design 6a). */
@@ -120,9 +119,9 @@ async function buildTarget(name, transform) {
   await rm(out, { recursive: true, force: true });
   await mkdir(out, { recursive: true });
 
-  // Copy the shared source tree and the icons.
+  // Copy the shared source tree. Icons live in src/icons (the committed PNGs and
+  // their SVG source), so they are copied with it into dist/<name>/icons.
   await cp(srcDir, out, { recursive: true });
-  await cp(iconsDir, join(out, "icons"), { recursive: true });
 
   // The base manifest is a source file, not a shipped artifact: drop it and
   // write the transformed manifest.json in its place.

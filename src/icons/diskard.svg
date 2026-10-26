@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <path d="M20,124 V64 A44,44 0 0 1 108,64 V124" fill="#E0B58A" stroke="#111" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M52,30 Q58,18 64,28 Q70,18 76,30" fill="none" stroke="#111" stroke-width="4" stroke-linecap="round"/>
+  <path d="M58,92 Q58,101 64,101 Q70,101 70,92" fill="none" stroke="#111" stroke-width="4" stroke-linecap="round"/>
+  <path d="M52,113 L76,113" fill="none" stroke="#111" stroke-width="4.5" stroke-linecap="round"/>
+  <ellipse cx="84" cy="66" rx="8" ry="4.5" fill="#fff" stroke="#111" stroke-width="1.5"/>
+  <circle cx="81" cy="66" r="3" fill="#111"/>
+  <g fill="#111" stroke="#E0B58A" stroke-width="2.5">
+    <path d="M4,128 L8,84 Q10,68 26,68 L30,90 L22,128 Z"/>
+    <rect x="12" y="44" width="50" height="11" rx="5.5"/>
+    <rect x="12" y="55" width="51" height="11" rx="5.5"/>
+    <rect x="12" y="66" width="49" height="11" rx="5.5"/>
+    <rect x="14" y="77" width="42" height="11" rx="5.5"/>
+    <circle cx="20" cy="72" r="14" stroke="none"/>
+  </g>
+  <g fill="#111" stroke="#E0B58A" stroke-width="2.5">
+    <path d="M124,128 L120,84 Q118,68 102,68 L98,90 L106,128 Z"/>
+    <rect x="66" y="44" width="50" height="11" rx="5.5"/>
+    <rect x="65" y="53" width="51" height="11" rx="5.5" transform="rotate(2 116 58)"/>
+    <rect x="67" y="68" width="49" height="11" rx="5.5" transform="rotate(-2 116 73)"/>
+    <rect x="72" y="79" width="42" height="11" rx="5.5" transform="rotate(-2 114 84)"/>
+    <circle cx="108" cy="74" r="14" stroke="none"/>
+  </g>
+</svg>
