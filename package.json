@@ -7,6 +7,7 @@
   "scripts": {
     "icons": "node scripts/icons.mjs",
     "build": "node scripts/build.mjs",
+    "package": "node scripts/package.mjs",
     "demo": "node scripts/demo.mjs",
     "store-shots": "node scripts/store-shots.mjs",
     "live-check": "node scripts/live-check.mjs",

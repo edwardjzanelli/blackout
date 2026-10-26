@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Diskard",
   "version": "0.1.0",
-  "description": "Black out unwanted topics, people and spoilers on web pages. All processing stays on your device.",
+  "description": "Black out what you're sick of seeing. Pick words or names, and Diskard hides matching stories, posts and videos on any site.",
   "permissions": ["storage"],
   "host_permissions": ["<all_urls>"],
   "content_security_policy": {
