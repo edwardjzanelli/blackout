@@ -35,9 +35,9 @@ test("masks only the matching card; siblings are untouched", async () => {
   assert.ok(card.classList.contains(BLACKED_CLASS));
   const host = uiHost(card);
   assert.ok(host, "injected UI host present");
-  const shadowButton = host.shadowRoot.querySelector("button");
-  assert.equal(host.shadowRoot.querySelector(".label").textContent, "Content blacked out");
-  assert.equal(host.shadowRoot.querySelector(".profile").textContent, "Quendle");
+  const shadowButton = overlay.shadowRootFor(host).querySelector("button");
+  assert.equal(overlay.shadowRootFor(host).querySelector(".label").textContent, "Content blacked out");
+  assert.equal(overlay.shadowRootFor(host).querySelector(".profile").textContent, "Quendle");
   assert.equal(shadowButton.textContent, "Reveal");
 
   for (const id of ["card-1", "card-3"]) {
@@ -52,7 +52,7 @@ test("Reveal then re-blackout toggles the card and the button label", async () =
   const { document } = dom.window;
   const card = document.getElementById("card-2");
   overlay.blackout(card, "Quendle", { window: dom.window });
-  const button = uiHost(card).shadowRoot.querySelector("button");
+  const button = overlay.shadowRootFor(uiHost(card)).querySelector("button");
 
   button.click(); // reveal
   assert.ok(!card.classList.contains(BLACKED_CLASS), "revealed: class removed");
@@ -74,7 +74,7 @@ test("a reveal click does not activate the link underneath", async () => {
     linkActivated = true;
   });
 
-  uiHost(card).shadowRoot.querySelector("button").click();
+  overlay.shadowRootFor(uiHost(card)).querySelector("button").click();
   assert.equal(linkActivated, false);
 });
 

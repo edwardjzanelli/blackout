@@ -72,7 +72,7 @@ function maskAll(dom) {
 }
 
 function clickReveal(card) {
-  const btn = card.querySelector(".blackout-ui").shadowRoot.querySelector("button");
+  const btn = overlay.shadowRootFor(card.querySelector(".blackout-ui")).querySelector("button");
   btn.dispatchEvent(new card.ownerDocument.defaultView.MouseEvent("click", { bubbles: true, cancelable: true, composed: true }));
 }
 

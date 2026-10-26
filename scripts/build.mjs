@@ -4,7 +4,7 @@
 
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, posix } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const srcDir = join(root, "src");
@@ -16,6 +16,19 @@ const CONTENT_ENTRY = "content/main.js";
 
 /** `npm run build -- --debug` turns on content-script decision logging. */
 const DEBUG_BUILD = process.argv.includes("--debug");
+
+/**
+ * Remove debug-only source regions, delimited by `/* @debug-only:start *\/` ...
+ * `/* @debug-only:end *\/`, from a shipped module. This is how the page-writable
+ * `blackout:no-page-rule` localStorage escape hatch is physically removed from a
+ * normal (non-debug) build, not merely guarded at runtime: a store build has no
+ * code path that reads it. Debug builds keep the regions.
+ * @param {string} code
+ * @returns {string}
+ */
+export function stripDebugBlocks(code) {
+  return code.replace(/[ \t]*\/\* @debug-only:start \*\/[\s\S]*?\/\* @debug-only:end \*\/\n?/g, "");
+}
 
 /** Strip comments so JSDoc `import("...")` type refs are not read as imports. */
 function stripComments(code) {
@@ -133,23 +146,33 @@ async function buildTarget(name, transform) {
     JSON.stringify(manifest, null, 2) + "\n",
   );
 
-  // Flip the debug flag in the built copies only; src stays DEBUG = false. All
-  // graph modules share the flag (e.g. storage.js logs its sync fallback).
-  if (DEBUG_BUILD) {
-    for (const rel of graph.filter((r) => r.endsWith(".js"))) {
-      const modulePath = join(out, rel);
-      const code = await readFile(modulePath, "utf8");
-      await writeFile(modulePath, code.replace("const DEBUG = false;", "const DEBUG = true;"));
-    }
+  // In the built copies only (src stays DEBUG = false): a debug build flips the
+  // logging flag on; a normal build strips every debug-only region so the shipped
+  // code physically cannot read the page-writable no-page-rule flag (design 9).
+  for (const rel of graph.filter((r) => r.endsWith(".js"))) {
+    const modulePath = join(out, rel);
+    const code = await readFile(modulePath, "utf8");
+    const next = DEBUG_BUILD
+      ? code.replace("const DEBUG = false;", "const DEBUG = true;")
+      : stripDebugBlocks(code);
+    if (next !== code) await writeFile(modulePath, next);
   }
 
   console.log(`built dist/${name}${DEBUG_BUILD ? " (debug)" : ""}`);
 }
 
-for (const name of ACTIVE_TARGETS) {
-  const transform = TRANSFORMS[name];
-  if (!transform) {
-    throw new Error(`no manifest transform for target "${name}"`);
+/** Build all active targets. Guarded so importing this module (e.g. in tests)
+ * does not trigger a build. */
+export async function buildAll() {
+  for (const name of ACTIVE_TARGETS) {
+    const transform = TRANSFORMS[name];
+    if (!transform) {
+      throw new Error(`no manifest transform for target "${name}"`);
+    }
+    await buildTarget(name, transform);
   }
-  await buildTarget(name, transform);
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
+  await buildAll();
 }

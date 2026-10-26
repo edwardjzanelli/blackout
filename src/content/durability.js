@@ -3,7 +3,7 @@
 // container and keeps it correct: re-apply if the page stripped our class or
 // child, clean up if the node was removed or now holds non-matching content.
 
-import { makeCandidateWalker } from "./scan.js";
+import { makeCandidateWalker, blockText } from "./scan.js";
 import * as overlay from "./overlay.js";
 
 const ATTRS = ["title", "aria-label", "alt"];
@@ -51,6 +51,11 @@ function attrsMatch(el, matcher, now) {
  */
 export function containerMatches(container, matcher, win, now) {
   if (!matcher || matcher.isEmpty) return false;
+  // Test the container's rendered block text first (the shared extraction), so a
+  // phrase that spans inline markup, a <br>/<wbr>, or adjacent block children
+  // keeps its mask instead of being stripped because no single text node matches.
+  const whole = blockText(container, isOwn);
+  if (whole.trim() && matcher.test(whole) && matcher.match(whole, now)) return true;
   if (container.nodeType === 1 && attrsMatch(container, matcher, now)) return true;
   const walker = makeCandidateWalker(win.document, container, isOwn);
   let node;

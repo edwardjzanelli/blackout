@@ -115,6 +115,25 @@ button:focus-visible { outline: 2px solid #4aa3ff; outline-offset: 2px; }
 /** @type {WeakMap<Element, OverlayRecord>} */
 const overlays = new WeakMap();
 
+/**
+ * Our closed shadow roots, keyed by host. The shadow is closed so a page script
+ * cannot read `host.shadowRoot` and learn which terms the user blocks. This map
+ * lets our own code (and tests) reach the root; a page that imports this module
+ * gets a separate module instance in its own realm with an empty map, so it
+ * still cannot reach a live mask's shadow root.
+ * @type {WeakMap<Element, ShadowRoot>}
+ */
+const shadowRoots = new WeakMap();
+
+/**
+ * The closed shadow root we attached to one of our hosts, or null.
+ * @param {Element} host
+ * @returns {ShadowRoot|null}
+ */
+export function shadowRootFor(host) {
+  return shadowRoots.get(host) || null;
+}
+
 /** Pointer/mouse/touch events whose default (navigation, selection) we cancel. */
 const POINTER_EVENTS = ["click", "mousedown", "mouseup", "pointerdown", "pointerup", "touchstart", "touchend"];
 
@@ -262,7 +281,8 @@ export function blackout(container, term, options = {}) {
   host.style.setProperty("z-index", "2147483647", "important");
   host.style.setProperty("isolation", "isolate", "important");
   host.style.setProperty("pointer-events", "auto", "important");
-  const shadow = host.attachShadow({ mode: "open" });
+  const shadow = host.attachShadow({ mode: "closed" });
+  shadowRoots.set(host, shadow);
 
   const style = doc.createElement("style");
   style.textContent = SHADOW_CSS;

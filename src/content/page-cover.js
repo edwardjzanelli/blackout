@@ -59,6 +59,24 @@ button:focus-visible { outline: 2px solid #4aa3ff; outline-offset: 2px; }
 /** @type {CoverState|null} single cover per page */
 let state = null;
 
+/**
+ * Our closed shadow roots, keyed by host (the cover host). Closed so a page
+ * script cannot read the cover's term label; this map lets our own code and
+ * tests reach it, while a page that imports this module gets a separate,
+ * empty map in its own realm.
+ * @type {WeakMap<Element, ShadowRoot>}
+ */
+const shadowRoots = new WeakMap();
+
+/**
+ * The closed shadow root we attached to the cover host, or null.
+ * @param {Element} host
+ * @returns {ShadowRoot|null}
+ */
+export function shadowRootFor(host) {
+  return shadowRoots.get(host) || null;
+}
+
 /** @returns {boolean} */
 export function isPageCovered() {
   return state !== null;
@@ -81,7 +99,8 @@ export function coverPage(doc, term, options = {}) {
   host.style.inset = "0";
   host.style.setProperty("z-index", String(Z_TOP), "important");
   host.style.setProperty("isolation", "isolate", "important");
-  const shadow = host.attachShadow({ mode: "open" });
+  const shadow = host.attachShadow({ mode: "closed" });
+  shadowRoots.set(host, shadow);
 
   const style = doc.createElement("style");
   style.textContent = COVER_CSS;

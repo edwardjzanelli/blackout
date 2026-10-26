@@ -45,13 +45,17 @@ test("injected mask and page-cover UI show no 'Blackout' in their visible text",
   overlay.blackout(container, "Some Term", { window });
   pageCover.coverPage(document, "Some Term", { window });
 
-  // The visible label/button text lives in each component's open shadow root.
+  // The shadow roots are closed, so reach them through each module's accessor.
   // Skip the <style> child: its CSS legitimately references internal names (e.g.
   // the data-blackout-state attribute selector), which are not user-visible text.
   let injected = "";
-  for (const host of document.querySelectorAll(".blackout-ui, #blackout-page-cover")) {
-    if (!host.shadowRoot) continue;
-    for (const node of host.shadowRoot.childNodes) {
+  const roots = [
+    overlay.shadowRootFor(container.querySelector(".blackout-ui")),
+    pageCover.shadowRootFor(document.getElementById("blackout-page-cover")),
+  ];
+  for (const root of roots) {
+    if (!root) continue;
+    for (const node of root.childNodes) {
       if (node.nodeType === 1 && (node.tagName === "STYLE" || node.tagName === "SCRIPT")) continue;
       injected += "\n" + (node.textContent || "");
     }

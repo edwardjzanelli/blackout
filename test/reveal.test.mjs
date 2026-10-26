@@ -12,7 +12,7 @@ const BLACKED = "blackout-blacked-out";
 
 /** The Reveal/Black out again button inside a masked container's host. */
 function button(container) {
-  return container.querySelector(".blackout-ui").shadowRoot.querySelector("button");
+  return overlay.shadowRootFor(container.querySelector(".blackout-ui")).querySelector("button");
 }
 
 test("a card that is an <a> wrapping everything never navigates on Reveal", () => {

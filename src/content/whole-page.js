@@ -3,7 +3,7 @@
 // (enough detected stories match), and which term labels the cover.
 
 import { repeatedGroup } from "./container.js";
-import { makeCandidateWalker } from "./scan.js";
+import { makeCandidateWalker, nearestBlock, blockText } from "./scan.js";
 
 /** Attributes that carry matchable text and so make an element a reference. */
 const REF_ATTRS = ["title", "aria-label", "alt"];
@@ -111,22 +111,27 @@ export function shouldCoverByRefs(refCount, prefs) {
  */
 export function countReferences(root, matcher, win, isOwn, now = Date.now()) {
   if (!matcher || matcher.isEmpty) return 0;
+  const own = isOwn || (() => false);
   const owners = new Set();
-  const walker = makeCandidateWalker(win.document, root, isOwn || (() => false));
+  const testedBlocks = new Set();
+  const walker = makeCandidateWalker(win.document, root, own);
   let node;
   while ((node = walker.nextNode())) {
-    let owner = null;
-    let text = "";
     if (node.nodeType === 3) {
-      owner = node.parentElement;
-      text = node.nodeValue || "";
+      // Count the text's nearest block once, matched on its rendered block text
+      // (the shared extraction), so a reference split across inline markup or a
+      // break still counts.
+      const block = nearestBlock(node.parentElement);
+      if (!block || own(block) || testedBlocks.has(block)) continue;
+      testedBlocks.add(block);
+      const text = blockText(block, own);
+      if (text.trim() && matcher.test(text) && matcher.match(text, now)) owners.add(block);
     } else if (node.nodeType === 1) {
-      owner = /** @type {Element} */ (node);
-      text = REF_ATTRS.map((a) => owner.getAttribute(a)).filter(Boolean).join(" ");
+      const owner = /** @type {Element} */ (node);
+      if (own(owner)) continue;
+      const attrs = REF_ATTRS.map((a) => owner.getAttribute(a)).filter(Boolean).join(" ");
+      if (attrs.trim() && matcher.test(attrs) && matcher.match(attrs, now)) owners.add(owner);
     }
-    if (!owner || !text.trim()) continue;
-    if (isOwn && isOwn(owner)) continue;
-    if (matcher.test(text) && matcher.match(text, now)) owners.add(owner);
   }
   return owners.size;
 }

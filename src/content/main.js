@@ -13,8 +13,8 @@ import {
   bumpCounter,
 } from "../shared/storage.js";
 import { compileMatcher, displayTerm } from "./matcher.js";
-import { findContainer } from "./container.js";
-import { makeCandidateWalker, isSkippable } from "./scan.js";
+import { findContainer, isForbiddenBoundary } from "./container.js";
+import { makeCandidateWalker, isSkippable, nearestBlock, blockText, INLINE_TAGS } from "./scan.js";
 import { reverify } from "./durability.js";
 import {
   ruleOneTerm,
@@ -24,6 +24,7 @@ import {
   mostMatchedTerm,
 } from "./whole-page.js";
 import { watchNavigation } from "./navwatch.js";
+import { hasExtensionApis } from "../shared/browser.js";
 import { unitSelectorFor } from "../adapters/index.js";
 import { storyKey, isRevealed, reset as resetRevealed } from "./revealed.js";
 import * as pageCover from "./page-cover.js";
@@ -288,27 +289,55 @@ function handleCandidate(cacheKey, element, text) {
  * @param {Node} node
  */
 function processNode(node) {
-  const type = node.nodeType;
-  if (type === 3) {
-    const parent = node.parentElement;
-    if (parent && isSkippable(parent, isOwnNode)) return; // e.g. text in <script>
-    const text = node.nodeValue || "";
-    if (text.trim()) {
+  // Text nodes are matched through their block (see enqueue): a phrase split by
+  // inline markup, a <br>/<wbr>, or adjacent block children must be read whole,
+  // which a single text node cannot give. Only elements are processed here.
+  if (node.nodeType !== 1) return;
+  if (isSkippable(node, isOwnNode)) return;
+
+  // Attribute text (title/aria-label/alt) belongs to this element alone.
+  const parts = [];
+  for (const name of ATTRS) {
+    const value = node.getAttribute(name);
+    if (value) parts.push(value);
+  }
+  if (parts.length) {
+    examinedAttrs += parts.length;
+    handleCandidate(node, node, parts.join(" "));
+  }
+
+  // Block-level elements carry matchable rendered text. Read the block's text
+  // (inline splits joined; <br>/<wbr> and nested block boundaries spaced) so a
+  // phrase is matched whole. Skip inline elements (their text is part of their
+  // block) and page-structure boundaries (never a mask target; reading their
+  // whole text would be costly and the cards inside are read on their own).
+  const tag = (node.tagName || "").toUpperCase();
+  if (!INLINE_TAGS.has(tag) && !isForbiddenBoundary(node)) {
+    const text = blockText(node, isOwnNode);
+    if (text.trim() && blockMatches(text)) {
       examinedText++;
-      handleCandidate(node, parent, text);
-    }
-  } else if (type === 1) {
-    if (isSkippable(node, isOwnNode)) return;
-    const parts = [];
-    for (const name of ATTRS) {
-      const value = node.getAttribute(name);
-      if (value) parts.push(value);
-    }
-    if (parts.length) {
-      examinedAttrs += parts.length;
-      handleCandidate(node, node, parts.join(" "));
+      // Mask at the deepest matching block: if a child block also matches, let
+      // it handle the match, so we never mask a wrapper larger than the phrase
+      // (the match spans this block's children only when no child matches alone).
+      if (!childBlockMatches(node)) handleCandidate(node, node, text);
     }
   }
+}
+
+/** @param {string} text @returns {boolean} whether the active matcher hits */
+function blockMatches(text) {
+  return Boolean(matcher && !matcher.isEmpty && matcher.test(text) && matcher.match(text, Date.now()));
+}
+
+/** Whether any child block element of el matches on its own rendered text. */
+function childBlockMatches(el) {
+  for (const child of el.children) {
+    const tag = (child.tagName || "").toUpperCase();
+    if (INLINE_TAGS.has(tag) || isSkippable(child, isOwnNode)) continue;
+    const text = blockText(child, isOwnNode);
+    if (text.trim() && blockMatches(text)) return true;
+  }
+  return false;
 }
 
 /**
@@ -385,6 +414,13 @@ function scheduleFlush() {
  */
 function enqueue(node) {
   if (!node || isOwnNode(node)) return;
+  // A changed text node is matched through its block, so enqueue the block (its
+  // subtree is walked and every block in it processed).
+  if (node.nodeType === 3) {
+    const block = nearestBlock(node.parentElement);
+    if (block && !isOwnNode(block)) pending.push(block);
+    return;
+  }
   pending.push(node);
 }
 
@@ -433,9 +469,15 @@ function countReference(element, term) {
  * (design 3.6): dropping into whole-page mode removes every existing card mask
  * (exact restore) and blocks any further card masking until reload.
  * @param {string} term
+ * @param {"1"|"2a"|"2b"} rule which §3.6 rule fired (for the debug explanation)
  */
-function coverNow(term) {
+function coverNow(term, rule) {
   if (pageMode.inWholePage() || !term) return;
+  // Gather the full cover explanation while the per-card state is still intact
+  // (enterWholePage clears activeContainers below). Debug build only.
+  /* @debug-only:start */
+  const coverNote = explainCover(rule, term);
+  /* @debug-only:end */
   pageMode.enterWholePage(activeContainers); // removes card masks, flips the mode
   maskObserver.disconnect();
   reverifyQueue = [];
@@ -443,7 +485,136 @@ function coverNow(term) {
   pageCover.coverPage(doc, term, { window: win }); // term is the only rendered text
   recordBlocked(); // a whole-page cover counts as one blocked story (FR-12)
   log(`page covered term="${term}"`);
+  /* @debug-only:start */
+  annotateCover(coverNote);
+  /* @debug-only:end */
 }
+
+/* @debug-only:start */
+/**
+ * Explain exactly why the whole page was covered (design review, Ed's ruling):
+ * log one [blackout] block with the rule that fired, the thresholds in force,
+ * and the counts for all three rules so the margin is visible. Returns a short
+ * note shown on the cover itself. Debug build only (stripped from normal builds).
+ * @param {"1"|"2a"|"2b"} rule
+ * @param {string} term
+ * @returns {string}
+ */
+function explainCover(rule, term) {
+  const now = Date.now();
+  const ratio = prefs.pageCoverRatio;
+  const min = prefs.pageCoverMinMatches;
+  const max = prefs.pageCoverMaxRefs;
+  const stories = storyCounts(activeContainers);
+  const r1 = ruleOneWithSource(now);
+  const refs = gatherReferences(now);
+  const blocks = new Set(refs.map((r) => r.container).filter(Boolean));
+
+  log(`==== whole-page cover: rule ${rule} fired (term="${term}") ====`);
+  log(`thresholds: pageCoverRatio=${ratio} pageCoverMinMatches=${min} pageCoverMaxRefs=${max}`);
+  log(
+    `rule 1 (title/URL): ${r1 ? `MATCH term="${r1.term}" via ${r1.source}="${snippet(r1.value)}"` : "no match"}`,
+  );
+  log(
+    `rule 2a (story share): detected=${stories.total} matching=${stories.matched} ` +
+      `fires=${shouldCoverByStories(stories, prefs)} (needs matching>=${min} AND matching>${ratio}*detected)`,
+  );
+  for (const c of activeContainers) {
+    log(`  2a matching story: ${describeEl(c)} "${snippet(blockText(c, isOwnNode))}"`);
+  }
+  log(
+    `rule 2b (references): count=${refCount} fires=${shouldCoverByRefs(refCount, prefs)} (needs >${max})`,
+  );
+  for (const r of refs) {
+    log(`  2b ref: <${r.tag}> where=${r.where} term="${r.term}" block#${r.blockIdx} "${r.snippet}"`);
+  }
+  log(`rule 2b alternative: distinct visible blocks (masked units) = ${blocks.size}`);
+  log(`(gathered references=${refs.length}; live refCount=${refCount})`);
+  log(`==== end cover explanation ====`);
+
+  if (rule === "1") return `debug: rule 1, title/URL "${r1 ? r1.term : term}"`;
+  if (rule === "2a") return `debug: rule 2a, ${stories.matched}/${stories.total} stories match`;
+  return `debug: rule 2b, ${refCount} references > ${max} (${blocks.size} visible blocks)`;
+}
+
+/** Rule 1 match with its source (which URL param, or the title). */
+function ruleOneWithSource(now) {
+  const params = new URLSearchParams(win.location.search || "");
+  for (const [key, value] of params) {
+    const hit = matcher.match(value, now);
+    if (hit) return { term: displayTerm(hit), source: `url:${key}`, value };
+  }
+  const title = doc.title || "";
+  const hit = title && matcher.match(title, now);
+  return hit ? { term: displayTerm(hit), source: "title", value: title } : null;
+}
+
+/** Re-gather references with detail, mirroring the live scan (deepest matching
+ * block for text, plus attribute matches), each tagged with its visible block
+ * (the container findContainer would mask). */
+function gatherReferences(now) {
+  const seen = new Set();
+  const containerIdx = new Map();
+  const out = [];
+  const walker = makeCandidateWalker(doc, doc.body, isOwnNode);
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.nodeType !== 1) continue;
+    const el = /** @type {Element} */ (node);
+    if (seen.has(el)) continue;
+    const tag = (el.tagName || "").toUpperCase();
+    let where = null;
+    let text = "";
+    for (const name of ATTRS) {
+      const v = el.getAttribute(name);
+      if (v && matcher.test(v) && matcher.match(v, now)) {
+        where = name;
+        text = v;
+        break;
+      }
+    }
+    if (!where && !INLINE_TAGS.has(tag) && !isForbiddenBoundary(el)) {
+      const bt = blockText(el, isOwnNode);
+      if (bt.trim() && blockMatches(bt) && !childBlockMatches(el)) {
+        where = "text";
+        text = bt;
+      }
+    }
+    if (!where) continue;
+    seen.add(el);
+    const container = findContainer(el, win, unitSelectors).container;
+    if (container && !containerIdx.has(container)) containerIdx.set(container, containerIdx.size);
+    const hit = matcher.match(text, now);
+    out.push({
+      tag: el.tagName.toLowerCase(),
+      where,
+      term: hit ? displayTerm(hit) : "",
+      snippet: snippet(text),
+      container,
+      blockIdx: container ? containerIdx.get(container) : -1,
+    });
+  }
+  return out;
+}
+
+/** @param {Element} el short tag[role] description */
+function describeEl(el) {
+  const role = roleOf(el);
+  return `${el.tagName.toLowerCase()}${role ? `[role=${role}]` : ""}`;
+}
+
+/** Append the short cover explanation to the cover itself (debug only). */
+function annotateCover(note) {
+  const host = doc.getElementById("blackout-page-cover");
+  const root = host && pageCover.shadowRootFor(host);
+  const cover = root && root.querySelector(".cover");
+  if (!cover) return;
+  const p = doc.createElement("p");
+  p.textContent = note;
+  p.style.cssText = "font-size:11px;opacity:0.7;margin:6px 0 0";
+  cover.appendChild(p);
+}
+/* @debug-only:end */
 
 /**
  * Debug-only escape hatch so a live check can exercise per-card masking on pages
@@ -452,12 +623,14 @@ function coverNow(term) {
  * @returns {boolean}
  */
 function pageRulesDisabled() {
-  if (!DEBUG) return false;
+  /* @debug-only:start */
   try {
-    return win.localStorage.getItem("blackout:no-page-rule") === "1";
+    if (win.localStorage.getItem("blackout:no-page-rule") === "1") return true;
   } catch {
-    return false;
+    // localStorage may be unavailable; fall through.
   }
+  /* @debug-only:end */
+  return false;
 }
 
 /** Rule 1: title or URL search word matches a filter (design 3.6). */
@@ -471,18 +644,18 @@ function checkRule1() {
   if (hit) {
     const term = displayTerm(hit);
     countTerm(term);
-    coverNow(term);
+    coverNow(term, "1");
   }
 }
 
-/** Rule 2: enough detected stories match, or enough references appear (3.6). */
+/** Rule 2: enough detected stories match (2a), or enough references appear (2b)
+ * (design 3.6). 2a is checked first so the rule that actually fires is reported. */
 function checkRule2() {
   if (pageMode.inWholePage() || paused || !prefs || pageRulesDisabled()) return;
-  if (
-    shouldCoverByStories(storyCounts(activeContainers), prefs) ||
-    shouldCoverByRefs(refCount, prefs)
-  ) {
-    coverNow(mostMatchedTerm(termInfo));
+  if (shouldCoverByStories(storyCounts(activeContainers), prefs)) {
+    coverNow(mostMatchedTerm(termInfo), "2a");
+  } else if (shouldCoverByRefs(refCount, prefs)) {
+    coverNow(mostMatchedTerm(termInfo), "2b");
   }
 }
 
@@ -614,4 +787,7 @@ async function init() {
   }
 }
 
-init();
+// Only run inside a real extension context. If a web page imports this module
+// from web_accessible_resources, the extension APIs are absent, so init() never
+// runs: no observers, no listeners, no DOM changes (defense in depth, design 9).
+if (hasExtensionApis()) init();

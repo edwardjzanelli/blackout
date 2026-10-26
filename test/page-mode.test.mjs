@@ -72,8 +72,8 @@ function guardedReverify(container, active, win) {
   if (active.has(container)) reverify(container, matcher(), win, active);
 }
 
-const reveal = (doc) => doc.getElementById("blackout-page-cover").shadowRoot.querySelector(".reveal").click();
-const blackoutAgain = (doc) => doc.getElementById("blackout-page-cover").shadowRoot.querySelector(".again").click();
+const reveal = (doc) => pageCover.shadowRootFor(doc.getElementById("blackout-page-cover")).querySelector(".reveal").click();
+const blackoutAgain = (doc) => pageCover.shadowRootFor(doc.getElementById("blackout-page-cover")).querySelector(".again").click();
 
 test("covered at start: Reveal leaves zero card masks", () => {
   pageMode.reset();

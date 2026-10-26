@@ -6,6 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import starters from "../src/config/starter-profiles.json" with { type: "json" };
+import { compileMatcher } from "../src/content/matcher.js";
 
 function makeChrome() {
   const listeners = [];
@@ -208,4 +209,27 @@ test("counters count distinct stories, a whole-page cover as one (FR-12)", async
   const { counters } = await storage.loadDeviceState();
   assert.equal(counters.todayCount, 4, "3 distinct cards + 1 cover, not once per scan");
   assert.equal(counters.totalCount, 4);
+});
+
+test("B4: a 500-line list round-trips through chunked sync with every line intact", async () => {
+  reset();
+  await storage.loadState(); // seed, then replace with a large user list
+  const terms = Array.from({ length: 500 }, (_, i) => `Topic Number ${i} unique${i}`);
+  await storage.saveTermList(terms);
+
+  // One sync item per filter (chunked, never one oversized blob), each small.
+  const items = profileItems(chrome.storage.sync);
+  assert.equal(items.length, 500, "one item per line, none merged or dropped");
+  assert.equal(chrome.storage.sync.data.has("terms"), false, "no single list blob");
+  for (const key of items) {
+    const bytes = Buffer.byteLength(JSON.stringify(chrome.storage.sync.data.get(key)), "utf8");
+    assert.ok(bytes < 8192, `${key} is ${bytes} bytes, under the 8 KB item limit`);
+  }
+
+  // Reload and compile: every one of the 500 lines is present and matches, whole.
+  const { profiles } = await storage.loadState();
+  const loaded = profiles.map((p) => p.includeTerms[0]);
+  assert.deepEqual([...loaded].sort(), [...terms].sort(), "every line reloaded intact");
+  const matcher = compileMatcher(profiles);
+  for (const term of terms) assert.ok(matcher.match(term, 0), `reloaded term matches: ${term}`);
 });

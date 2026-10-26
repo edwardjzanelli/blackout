@@ -42,7 +42,7 @@ test("the card label renders the include term as entered, not the profile name",
   const hit = matcher.match(card.querySelector("h3").textContent, Date.now());
 
   overlay.blackout(card, displayTerm(hit), { window: dom.window });
-  const shown = card.querySelector(".blackout-ui").shadowRoot.querySelector(".profile").textContent;
+  const shown = overlay.shadowRootFor(card.querySelector(".blackout-ui")).querySelector(".profile").textContent;
   assert.equal(shown, ENTERED);
   assert.notEqual(shown, INVENTED_NAME);
 });
@@ -56,8 +56,8 @@ test("the whole-page cover renders the include term as entered, not the profile 
   pageCover.uncoverPage();
   pageCover.coverPage(document, displayTerm(hit), { window: dom.window });
   const host = document.getElementById("blackout-page-cover");
-  const label = host.shadowRoot.querySelector(".label").textContent;
-  const second = host.shadowRoot.querySelector(".profile").textContent;
+  const label = pageCover.shadowRootFor(host).querySelector(".label").textContent;
+  const second = pageCover.shadowRootFor(host).querySelector(".profile").textContent;
 
   assert.match(label, new RegExp(`Lots of ${ENTERED} references`));
   assert.equal(second, ENTERED, "second line is the term");

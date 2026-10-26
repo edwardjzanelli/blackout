@@ -69,7 +69,7 @@ function maskAll(dom) {
   return active;
 }
 
-const coverLabel = (doc) => doc.getElementById("blackout-page-cover").shadowRoot.querySelector(".label").textContent;
+const coverLabel = (doc) => pageCover.shadowRootFor(doc.getElementById("blackout-page-cover")).querySelector(".label").textContent;
 
 test("matcher reports the include term as entered, not the matched surface", () => {
   assert.equal(matcher().match("the Quendles arrived", Date.now()).term, "Quendle");
@@ -142,7 +142,7 @@ test("cover locks scrolling and restores the previous overflow exactly on Reveal
   assert.equal(document.documentElement.style.overflow, "hidden", "scroll locked while covered");
 
   const host = document.getElementById("blackout-page-cover");
-  host.shadowRoot.querySelector(".reveal").click();
+  pageCover.shadowRootFor(host).querySelector(".reveal").click();
   assert.equal(document.documentElement.style.overflow, "scroll", "previous overflow restored exactly");
 });
 
@@ -153,10 +153,10 @@ test("Reveal then Black out again toggles the cover and the scroll lock", () => 
   pageCover.coverPage(document, "Quendle", { window: dom.window });
   const host = document.getElementById("blackout-page-cover");
 
-  host.shadowRoot.querySelector(".reveal").click(); // reveal
+  pageCover.shadowRootFor(host).querySelector(".reveal").click(); // reveal
   assert.equal(host.getAttribute("data-blackout-cover"), "revealed");
 
-  host.shadowRoot.querySelector(".again").click(); // black out again
+  pageCover.shadowRootFor(host).querySelector(".again").click(); // black out again
   assert.equal(host.getAttribute("data-blackout-cover"), "covered");
   assert.equal(document.documentElement.style.overflow, "hidden");
 });

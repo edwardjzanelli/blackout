@@ -21,6 +21,21 @@ const CARD_CLASS_RE = /(?:^|[-_ ])(?:card|post|tile|story|item|cell|entry)(?:[-_
 /** How many same-signature siblings make a parent a repeated-item list. */
 const MIN_REPEATED_SIBLINGS = 3;
 
+/**
+ * Whether el is a page-structure boundary that is never itself a mask target
+ * (body/html/main/nav/header/footer, or an ARIA feed/main/navigation). Scanning
+ * uses this to skip reading these giants' whole text: they never mask, and the
+ * cards inside them are read on their own.
+ * @param {Element|null} el
+ * @returns {boolean}
+ */
+export function isForbiddenBoundary(el) {
+  if (!el || el.nodeType !== 1) return false;
+  if (UNSAFE_TAGS.has(el.tagName)) return true;
+  const role = (el.getAttribute("role") || "").trim().toLowerCase();
+  return Boolean(role) && UNSAFE_ROLES.has(role);
+}
+
 /** Our own mask class, excluded from signatures so masking one card does not
  * change its signature and hide its still-unmasked siblings from the rule. */
 const OWN_CLASS = "blackout-blacked-out";
