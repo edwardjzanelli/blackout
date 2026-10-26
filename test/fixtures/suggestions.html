@@ -1,0 +1,25 @@
+<!doctype html>
+<!-- Suggestion-dropdown fixture (design 3.6 rule 5). A focused search input plus
+     eight matching suggestions. The input text is never masked or counted; each
+     suggestion is an independent reference that gets its own blackout. The term
+     comes from the starter config (Kardashian); all other text is invented, with
+     no real people or posts. Each suggestion also carries a matching image alt,
+     which must be excluded from the count (metadata, not visible text). -->
+<html lang="en">
+  <head><meta charset="utf-8" /><title>search</title></head>
+  <body>
+    <form role="search">
+      <input id="q" type="search" value="kard" autofocus aria-label="Search Kardashian" />
+      <ul id="suggestions" role="listbox">
+        <li role="option"><img alt="Kardashian thumbnail" /><span>Kardashian news today</span></li>
+        <li role="option"><img alt="Kardashian thumbnail" /><span>Kardashian latest headlines</span></li>
+        <li role="option"><img alt="Kardashian thumbnail" /><span>Kardashian show recap</span></li>
+        <li role="option"><img alt="Kardashian thumbnail" /><span>Kardashian family tree</span></li>
+        <li role="option"><img alt="Kardashian thumbnail" /><span>Kardashian net worth</span></li>
+        <li role="option"><img alt="Kardashian thumbnail" /><span>Kardashian new season</span></li>
+        <li role="option"><img alt="Kardashian thumbnail" /><span>Kardashian interview clips</span></li>
+        <li role="option"><img alt="Kardashian thumbnail" /><span>Kardashian photos gallery</span></li>
+      </ul>
+    </form>
+  </body>
+</html>

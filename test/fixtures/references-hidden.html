@@ -1,0 +1,40 @@
+<!doctype html>
+<!-- Hidden-references fixture (design 3.6 rule 2). Three visible references plus
+     nine matches that must NOT count: an image alt (metadata), a display:none
+     menu, an off-canvas carousel (overflow:hidden with visibility:hidden slides),
+     an opacity:0 teaser, a closed <details>, and a display:none mobile duplicate.
+     The term is the starter-config "Kardashian"; all other text is invented. -->
+<html lang="en">
+  <head><meta charset="utf-8" /><title>feed</title></head>
+  <body>
+    <main>
+      <section><p>Kardashian story one, in view.</p></section>
+      <section><p>Kardashian story two, in view.</p></section>
+      <section><p>Kardashian story three, in view.</p></section>
+
+      <img alt="Kardashian promo banner" />
+
+      <nav style="display:none">
+        <p>Kardashian menu link</p>
+        <p>Kardashian archive link</p>
+      </nav>
+
+      <div class="carousel" style="overflow:hidden">
+        <div class="slide" style="visibility:hidden"><p>Kardashian off-canvas slide A</p></div>
+        <div class="slide" style="visibility:hidden"><p>Kardashian off-canvas slide B</p></div>
+      </div>
+
+      <div style="opacity:0"><p>Kardashian faded teaser</p></div>
+
+      <details>
+        <summary>More stories</summary>
+        <p>Kardashian collapsed item</p>
+      </details>
+
+      <div class="mobile-only" style="display:none">
+        <p>Kardashian mobile duplicate one</p>
+        <p>Kardashian mobile duplicate two</p>
+      </div>
+    </main>
+  </body>
+</html>

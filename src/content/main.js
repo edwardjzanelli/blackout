@@ -16,7 +16,14 @@ import { compileMatcher, displayTerm } from "./matcher.js";
 import { findContainer, isForbiddenBoundary } from "./container.js";
 import { makeCandidateWalker, isSkippable, nearestBlock, blockText, INLINE_TAGS } from "./scan.js";
 import { reverify } from "./durability.js";
-import { ruleOneTerm, shouldCoverByRefs, mostMatchedTerm } from "./whole-page.js";
+import {
+  ruleOneTerm,
+  shouldCoverByRefs,
+  mostMatchedTerm,
+  visibleReferences,
+  referenceExcludeReason,
+  isInUserInput,
+} from "./whole-page.js";
 import { watchNavigation } from "./navwatch.js";
 import { hasExtensionApis } from "../shared/browser.js";
 import { unitSelectorFor } from "../adapters/index.js";
@@ -219,11 +226,6 @@ function handleCandidate(cacheKey, element, text) {
     return;
   }
 
-  // This element owns a match: count it once as a reference (design 3.6 rule 2),
-  // whatever happens to its container below, and tally its term for the cover
-  // label.
-  countReference(element, displayTerm(hit));
-
   const decision = findContainer(element, win, unitSelectors);
   const container = decision.container;
 
@@ -288,8 +290,14 @@ function processNode(node) {
   // which a single text node cannot give. Only elements are processed here.
   if (node.nodeType !== 1) return;
   if (isSkippable(node, isOwnNode)) return;
+  // Text the user is typing (input/textarea/contenteditable) is never masked and
+  // never counted (design 3.6 rule 5). A suggestion dropdown lives outside the
+  // field and is handled like any other content.
+  if (isInUserInput(node)) return;
 
-  // Attribute text (title/aria-label/alt) belongs to this element alone.
+  // Attribute text (title/aria-label/alt) belongs to this element alone. Attribute
+  // matches can mask a card (e.g. an image whose alt matches) but never count as a
+  // reference (design 3.6 rule 2).
   const parts = [];
   for (const name of ATTRS) {
     const value = node.getAttribute(name);
@@ -313,7 +321,10 @@ function processNode(node) {
       // Mask at the deepest matching block: if a child block also matches, let
       // it handle the match, so we never mask a wrapper larger than the phrase
       // (the match spans this block's children only when no child matches alone).
-      if (!childBlockMatches(node)) handleCandidate(node, node, text);
+      if (!childBlockMatches(node)) {
+        countVisibleReference(node, text); // count the visible reference (rule 2)
+        handleCandidate(node, node, text);
+      }
     }
   }
 }
@@ -397,9 +408,14 @@ function scheduleFlush() {
     lastFlushAt = perfNow();
     const more = drain();
     checkRule1(); // title may have arrived or changed since the last batch
-    checkRule2(); // re-evaluate detected-story coverage after each batch
+    checkRule2(); // re-evaluate reference coverage after each batch
     if (more) scheduleFlush();
-    else log(`scan examined textNodes=${examinedText} attrs=${examinedAttrs}`);
+    else {
+      log(`scan examined textNodes=${examinedText} attrs=${examinedAttrs}`);
+      /* @debug-only:start */
+      explainReferences(); // why the page was or wasn't covered (design 3.6)
+      /* @debug-only:end */
+    }
   }, wait);
 }
 
@@ -445,17 +461,21 @@ function countTerm(term) {
 }
 
 /**
- * Count one reference to a filter term (design 3.6 rule 2): the owning element,
- * once, and its term for the cover label. Only grows, so the cover never flips
- * back as the page scrolls.
- * @param {Element|null} element the element that owns the match
- * @param {string} term the include term as entered
+ * Count one visible reference to a filter term (design 3.6 rule 2): the owning
+ * block, once, if its text is actually visible and not in a user-input field.
+ * Attribute matches never reach here. The count only grows, so a page that grows
+ * past the threshold later gets covered, and masking a reference can't lower it
+ * (its visibility is judged ignoring our own mask).
+ * @param {Element|null} element the block whose visible text matched
+ * @param {string} text the matched block text
  */
-function countReference(element, term) {
+function countVisibleReference(element, text) {
   if (!element || refElements.has(element)) return;
+  if (referenceExcludeReason(element, win)) return; // user input, or not visible
   refElements.add(element);
   refCount += 1;
-  if (term) countTerm(term);
+  const hit = matcher.match(text, Date.now());
+  if (hit) countTerm(displayTerm(hit));
 }
 
 /**
@@ -498,7 +518,10 @@ function explainCover(rule, term) {
   const now = Date.now();
   const max = prefs.pageCoverMaxRefs;
   const r1 = ruleOneWithSource(now);
-  const refs = gatherReferences(now);
+  // Visibility is judged after enterWholePage has not yet run (coverNow gathers
+  // this first), so our card masks are still in place and are ignored by the
+  // visibility check, matching the live count.
+  const refs = visibleReferences(doc.body, matcher, win, isOwnNode, now);
 
   log(`==== whole-page cover: rule ${rule} fired (term="${term}") ====`);
   log(`threshold: pageCoverMaxRefs=${max}`);
@@ -506,16 +529,36 @@ function explainCover(rule, term) {
     `rule 1 (title/URL): ${r1 ? `MATCH term="${r1.term}" via ${r1.source}="${snippet(r1.value)}"` : "no match"}`,
   );
   log(
-    `rule 2 (references): count=${refCount} fires=${shouldCoverByRefs(refCount, prefs)} (needs >${max})`,
+    `rule 2 (visible references): count=${refs.count} fires=${shouldCoverByRefs(refs.count, prefs)} ` +
+      `(needs >${max}); live refCount=${refCount}`,
   );
-  for (const r of refs) {
-    log(`  2 ref: <${r.tag}> where=${r.where} term="${r.term}" block#${r.blockIdx} "${r.snippet}"`);
+  for (const r of refs.counted) log(`  counted: <${r.el.tagName.toLowerCase()}> "${r.snippet}"`);
+  log(`excluded matches: ${refs.excluded.length}`);
+  for (const r of refs.excluded) {
+    log(`  excluded (${r.reason}): <${r.el.tagName.toLowerCase()}> "${r.snippet}"`);
   }
-  log(`(gathered references=${refs.length}; live refCount=${refCount})`);
   log(`==== end cover explanation ====`);
 
   if (rule === "1") return `debug: rule 1, title/URL "${r1 ? r1.term : term}"`;
-  return `debug: rule 2, ${refCount} references > ${max}`;
+  return `debug: rule 2, ${refs.count} visible references > ${max}`;
+}
+
+/**
+ * Log the visible-reference breakdown when a scan settles, so Ed can see why a
+ * page was OR wasn't covered (design 3.6, item 6): the counted references and the
+ * excluded matches with the reason for each. Debug build only.
+ */
+function explainReferences() {
+  if (!matcher || matcher.isEmpty || !prefs || pageMode.inWholePage()) return;
+  const refs = visibleReferences(doc.body, matcher, win, isOwnNode, Date.now());
+  log(
+    `---- references: visible=${refs.count} (cover needs >${prefs.pageCoverMaxRefs}; ` +
+      `live refCount=${refCount}); excluded=${refs.excluded.length}; covered=false ----`,
+  );
+  for (const r of refs.counted) log(`  counted: <${r.el.tagName.toLowerCase()}> "${r.snippet}"`);
+  for (const r of refs.excluded) {
+    log(`  excluded (${r.reason}): <${r.el.tagName.toLowerCase()}> "${r.snippet}"`);
+  }
 }
 
 /** Rule 1 match with its source (which URL param, or the title). */
@@ -528,54 +571,6 @@ function ruleOneWithSource(now) {
   const title = doc.title || "";
   const hit = title && matcher.match(title, now);
   return hit ? { term: displayTerm(hit), source: "title", value: title } : null;
-}
-
-/** Re-gather references with detail, mirroring the live scan (deepest matching
- * block for text, plus attribute matches), each tagged with its visible block
- * (the container findContainer would mask). */
-function gatherReferences(now) {
-  const seen = new Set();
-  const containerIdx = new Map();
-  const out = [];
-  const walker = makeCandidateWalker(doc, doc.body, isOwnNode);
-  let node;
-  while ((node = walker.nextNode())) {
-    if (node.nodeType !== 1) continue;
-    const el = /** @type {Element} */ (node);
-    if (seen.has(el)) continue;
-    const tag = (el.tagName || "").toUpperCase();
-    let where = null;
-    let text = "";
-    for (const name of ATTRS) {
-      const v = el.getAttribute(name);
-      if (v && matcher.test(v) && matcher.match(v, now)) {
-        where = name;
-        text = v;
-        break;
-      }
-    }
-    if (!where && !INLINE_TAGS.has(tag) && !isForbiddenBoundary(el)) {
-      const bt = blockText(el, isOwnNode);
-      if (bt.trim() && blockMatches(bt) && !childBlockMatches(el)) {
-        where = "text";
-        text = bt;
-      }
-    }
-    if (!where) continue;
-    seen.add(el);
-    const container = findContainer(el, win, unitSelectors).container;
-    if (container && !containerIdx.has(container)) containerIdx.set(container, containerIdx.size);
-    const hit = matcher.match(text, now);
-    out.push({
-      tag: el.tagName.toLowerCase(),
-      where,
-      term: hit ? displayTerm(hit) : "",
-      snippet: snippet(text),
-      container,
-      blockIdx: container ? containerIdx.get(container) : -1,
-    });
-  }
-  return out;
 }
 
 /** Append the short cover explanation to the cover itself (debug only). */
@@ -736,6 +731,13 @@ async function init() {
   onStateChanged(reevaluate);
   onDeviceStateChanged(refreshPause); // popup pause toggles re-evaluate here
   if (!navCleanup) navCleanup = watchNavigation(win, onUrlChange); // SPA URL changes
+
+  /* @debug-only:start */
+  // Periodically log the reference breakdown, so a live check against a
+  // streaming page (which never settles) still shows why it was or wasn't
+  // covered. Debug build only.
+  win.setInterval(explainReferences, 4000);
+  /* @debug-only:end */
 
   // Answer the popup's "blocked on this page" request (design 3.1).
   const api = globalThis.browser ?? globalThis.chrome;

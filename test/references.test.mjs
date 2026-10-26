@@ -1,8 +1,9 @@
-// Whole-page rule 2, reference branch (design 3.6 addendum): the page is covered
-// when more than pageCoverMaxRefs (default 10) references to filter terms appear,
-// even with zero recognised cards. A reference is one element that owns a match
-// in its text or a title/aria-label/alt attribute, counted once. Our own
-// injected nodes never count. Red before countReferences/shouldCoverByRefs.
+// Whole-page rule 2 (design 3.6): the page is covered when more than
+// pageCoverMaxRefs (default 10) visible references to filter terms appear. A
+// reference is one element whose own visible text matches, counted once;
+// attribute matches (alt/aria-label/title) and our own injected nodes never
+// count. Visibility exclusions and user input are covered in
+// visible-references.test.mjs.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -42,11 +43,18 @@ test("11 references cover the page; 10 do not", () => {
   assert.equal(shouldCoverByRefs(10, prefs), false, "10 references do not cover");
 });
 
-test("one element matching in text, aria-label and title counts as a single reference", () => {
+test("an element counts once by its visible text; its matching attributes do not add to the count", () => {
   const win = new JSDOM(
     `<!doctype html><body><div title="${TERM}" aria-label="${TERM}">${TERM} everywhere</div></body>`,
   ).window;
-  assert.equal(countReferences(win.document.body, matcher, win, isOwn), 1);
+  assert.equal(countReferences(win.document.body, matcher, win, isOwn), 1, "counted once, by its text");
+});
+
+test("an element matching only in attributes (no visible text) does not count", () => {
+  const win = new JSDOM(
+    `<!doctype html><body><img alt="${TERM}" /><div title="${TERM}"></div></body>`,
+  ).window;
+  assert.equal(countReferences(win.document.body, matcher, win, isOwn), 0, "attribute-only matches are not references");
 });
 
 test("our own injected labels are not counted as references", () => {
