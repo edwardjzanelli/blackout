@@ -74,11 +74,11 @@ Automatic filtering needs access to all sites, and Chrome shows that as "Read an
 
 **3.6 [ADDED] Whole-page blackout.** When a page is mostly blocked content, Blackout covers the whole window instead of blacking out every story. The cover uses the same mechanism as a card mask (§8a): label, profile name, **Reveal**, **Black out again**. Reveal lasts until the page reloads. The label reads "Lots of *term* references on this page, so we blocked out the entire page.", where *term* is the filter term exactly as the user entered it, choosing the most frequently matched one when several match. The whole page is covered when either:
 1. the page title or the URL's search words match an active filter, or
-2. ~~more than half of the detected stories on the page match, with at least 6 matching.~~ **[CHANGED]** more than half of the detected stories on the page match, with at least 6 matching, or more than 10 references to filter terms appear on the page.
+2. ~~more than half of the detected stories on the page match, with at least 6 matching.~~ **[CHANGED]** more than 10 references to filter terms appear on the page. (The earlier "more than half of the detected stories match" rule was removed.)
 
 **[ADDED]** A reference is a distinct element that owns a match in its own text, `alt`, `aria-label` or `title`; each element counts once however many of its attributes match, masked and unmasked references both count, and the extension's own injected nodes never count. The count only grows as the page loads and scrolls, so once it passes the threshold the cover stays up. The reference rule covers pages whose matches are not organised into recognisable cards (for example a Facebook search page whose title stays "Facebook").
 
-~~Both thresholds (half, 6) are preferences, so they can be tuned later.~~ **[CHANGED]** The thresholds are preferences, so they can be tuned later: `pageCoverRatio` (half), `pageCoverMinMatches` (6) and `pageCoverMaxRefs` (10). **[ADDED]** Whole-page and per-card blackout are either/or: once a page is in whole-page mode, Reveal shows it completely unmasked, and Black out again restores the whole-page cover.
+~~Both thresholds (half, 6) are preferences, so they can be tuned later.~~ **[CHANGED]** The threshold is a preference, so it can be tuned later: `pageCoverMaxRefs` (10). **[ADDED]** Whole-page and per-card blackout are either/or: once a page is in whole-page mode, Reveal shows it completely unmasked, and Black out again restores the whole-page cover.
 
 # 4. Functional requirements
 

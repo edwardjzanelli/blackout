@@ -16,13 +16,7 @@ import { compileMatcher, displayTerm } from "./matcher.js";
 import { findContainer, isForbiddenBoundary } from "./container.js";
 import { makeCandidateWalker, isSkippable, nearestBlock, blockText, INLINE_TAGS } from "./scan.js";
 import { reverify } from "./durability.js";
-import {
-  ruleOneTerm,
-  storyCounts,
-  shouldCoverByStories,
-  shouldCoverByRefs,
-  mostMatchedTerm,
-} from "./whole-page.js";
+import { ruleOneTerm, shouldCoverByRefs, mostMatchedTerm } from "./whole-page.js";
 import { watchNavigation } from "./navwatch.js";
 import { hasExtensionApis } from "../shared/browser.js";
 import { unitSelectorFor } from "../adapters/index.js";
@@ -469,7 +463,7 @@ function countReference(element, term) {
  * (design 3.6): dropping into whole-page mode removes every existing card mask
  * (exact restore) and blocks any further card masking until reload.
  * @param {string} term
- * @param {"1"|"2a"|"2b"} rule which §3.6 rule fired (for the debug explanation)
+ * @param {"1"|"2"} rule which §3.6 rule fired (for the debug explanation)
  */
 function coverNow(term, rule) {
   if (pageMode.inWholePage() || !term) return;
@@ -502,39 +496,26 @@ function coverNow(term, rule) {
  */
 function explainCover(rule, term) {
   const now = Date.now();
-  const ratio = prefs.pageCoverRatio;
-  const min = prefs.pageCoverMinMatches;
   const max = prefs.pageCoverMaxRefs;
-  const stories = storyCounts(activeContainers);
   const r1 = ruleOneWithSource(now);
   const refs = gatherReferences(now);
-  const blocks = new Set(refs.map((r) => r.container).filter(Boolean));
 
   log(`==== whole-page cover: rule ${rule} fired (term="${term}") ====`);
-  log(`thresholds: pageCoverRatio=${ratio} pageCoverMinMatches=${min} pageCoverMaxRefs=${max}`);
+  log(`threshold: pageCoverMaxRefs=${max}`);
   log(
     `rule 1 (title/URL): ${r1 ? `MATCH term="${r1.term}" via ${r1.source}="${snippet(r1.value)}"` : "no match"}`,
   );
   log(
-    `rule 2a (story share): detected=${stories.total} matching=${stories.matched} ` +
-      `fires=${shouldCoverByStories(stories, prefs)} (needs matching>=${min} AND matching>${ratio}*detected)`,
-  );
-  for (const c of activeContainers) {
-    log(`  2a matching story: ${describeEl(c)} "${snippet(blockText(c, isOwnNode))}"`);
-  }
-  log(
-    `rule 2b (references): count=${refCount} fires=${shouldCoverByRefs(refCount, prefs)} (needs >${max})`,
+    `rule 2 (references): count=${refCount} fires=${shouldCoverByRefs(refCount, prefs)} (needs >${max})`,
   );
   for (const r of refs) {
-    log(`  2b ref: <${r.tag}> where=${r.where} term="${r.term}" block#${r.blockIdx} "${r.snippet}"`);
+    log(`  2 ref: <${r.tag}> where=${r.where} term="${r.term}" block#${r.blockIdx} "${r.snippet}"`);
   }
-  log(`rule 2b alternative: distinct visible blocks (masked units) = ${blocks.size}`);
   log(`(gathered references=${refs.length}; live refCount=${refCount})`);
   log(`==== end cover explanation ====`);
 
   if (rule === "1") return `debug: rule 1, title/URL "${r1 ? r1.term : term}"`;
-  if (rule === "2a") return `debug: rule 2a, ${stories.matched}/${stories.total} stories match`;
-  return `debug: rule 2b, ${refCount} references > ${max} (${blocks.size} visible blocks)`;
+  return `debug: rule 2, ${refCount} references > ${max}`;
 }
 
 /** Rule 1 match with its source (which URL param, or the title). */
@@ -597,12 +578,6 @@ function gatherReferences(now) {
   return out;
 }
 
-/** @param {Element} el short tag[role] description */
-function describeEl(el) {
-  const role = roleOf(el);
-  return `${el.tagName.toLowerCase()}${role ? `[role=${role}]` : ""}`;
-}
-
 /** Append the short cover explanation to the cover itself (debug only). */
 function annotateCover(note) {
   const host = doc.getElementById("blackout-page-cover");
@@ -648,14 +623,11 @@ function checkRule1() {
   }
 }
 
-/** Rule 2: enough detected stories match (2a), or enough references appear (2b)
- * (design 3.6). 2a is checked first so the rule that actually fires is reported. */
+/** Rule 2 (design 3.6): more than pageCoverMaxRefs references appear. */
 function checkRule2() {
   if (pageMode.inWholePage() || paused || !prefs || pageRulesDisabled()) return;
-  if (shouldCoverByStories(storyCounts(activeContainers), prefs)) {
-    coverNow(mostMatchedTerm(termInfo), "2a");
-  } else if (shouldCoverByRefs(refCount, prefs)) {
-    coverNow(mostMatchedTerm(termInfo), "2b");
+  if (shouldCoverByRefs(refCount, prefs)) {
+    coverNow(mostMatchedTerm(termInfo), "2");
   }
 }
 

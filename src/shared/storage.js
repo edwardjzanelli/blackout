@@ -50,8 +50,6 @@ const COUNTERS_KEY = "counters";
  * @property {string[]} siteAllowlist
  * @property {number} historyRetentionDays
  * @property {boolean} snarkyLabels
- * @property {number} pageCoverRatio fraction of stories that must match (3.6)
- * @property {number} pageCoverMinMatches minimum matching stories (3.6)
  * @property {number} pageCoverMaxRefs cover when references exceed this (3.6)
  */
 
@@ -77,8 +75,6 @@ function defaultPreferences() {
     siteAllowlist: [],
     historyRetentionDays: 30,
     snarkyLabels: false,
-    pageCoverRatio: 0.5,
-    pageCoverMinMatches: 6,
     pageCoverMaxRefs: 10,
   };
 }
@@ -91,16 +87,6 @@ function defaultPreferences() {
  */
 function migratePreferences(preferences, fromVersion) {
   let changed = false;
-  if (fromVersion < 2) {
-    if (typeof preferences.pageCoverRatio !== "number") {
-      preferences.pageCoverRatio = 0.5;
-      changed = true;
-    }
-    if (typeof preferences.pageCoverMinMatches !== "number") {
-      preferences.pageCoverMinMatches = 6;
-      changed = true;
-    }
-  }
   if (fromVersion < 4) {
     if (typeof preferences.pageCoverMaxRefs !== "number") {
       preferences.pageCoverMaxRefs = 10;
