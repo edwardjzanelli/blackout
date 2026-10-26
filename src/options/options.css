@@ -63,6 +63,18 @@ textarea {
 .saved {
   opacity: 0.8;
 }
+.credit {
+  margin: 28px 0 0;
+  font-size: 12px;
+  opacity: 0.6;
+}
+.credit a {
+  color: inherit;
+}
+.credit a:focus-visible {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
+}
 button {
   font: inherit;
   cursor: pointer;
