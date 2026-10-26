@@ -7,19 +7,24 @@
 // green) and the pages always match whatever the starter term is.
 //
 //   npm run demo   ->   http://localhost:8080/  and  /full.html
+//
+// createDemoServer() is exported so other tooling (scripts/store-shots.mjs) can
+// start and stop the same server itself, on any port, and leave nothing running.
 
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { dirname, extname, join, normalize } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import starterConfig from "../src/config/starter-profiles.json" with { type: "json" };
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const demoDir = join(root, "demo");
-const PORT = 8080;
+
+export const DEFAULT_PORT = 8080;
 
 /** The filter term, read from the config (never hard-coded here). */
-const TERM = (starterConfig[0] && starterConfig[0].includeTerms && starterConfig[0].includeTerms[0]) || "the topic";
+export const TERM =
+  (starterConfig[0] && starterConfig[0].includeTerms && starterConfig[0].includeTerms[0]) || "the topic";
 
 const CONTENT_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -29,32 +34,39 @@ const CONTENT_TYPES = {
   ".json": "application/json; charset=utf-8",
 };
 
-const server = createServer(async (req, res) => {
-  let pathname = decodeURIComponent((req.url || "/").split("?")[0]);
-  if (pathname.endsWith("/")) pathname += "index.html";
-  // Resolve under demoDir and refuse any path that escapes it.
-  const filePath = join(demoDir, normalize(pathname).replace(/^(\.\.(\/|\\|$))+/, ""));
-  if (filePath !== demoDir && !filePath.startsWith(demoDir + "\\") && !filePath.startsWith(demoDir + "/")) {
-    res.writeHead(403, { "content-type": "text/plain" });
-    res.end("forbidden");
-    return;
-  }
-  try {
-    const ext = extname(filePath);
-    let body = await readFile(filePath);
-    if (ext === ".html") {
-      body = Buffer.from(body.toString("utf8").split("__TERM__").join(TERM), "utf8");
+/** An http.Server that serves demo/, injecting the config term for __TERM__ in
+ * HTML. Not yet listening; call .listen(port). @returns {import("node:http").Server} */
+export function createDemoServer() {
+  return createServer(async (req, res) => {
+    let pathname = decodeURIComponent((req.url || "/").split("?")[0]);
+    if (pathname.endsWith("/")) pathname += "index.html";
+    // Resolve under demoDir and refuse any path that escapes it.
+    const filePath = join(demoDir, normalize(pathname).replace(/^(\.\.(\/|\\|$))+/, ""));
+    if (filePath !== demoDir && !filePath.startsWith(demoDir + "\\") && !filePath.startsWith(demoDir + "/")) {
+      res.writeHead(403, { "content-type": "text/plain" });
+      res.end("forbidden");
+      return;
     }
-    res.writeHead(200, { "content-type": CONTENT_TYPES[ext] || "application/octet-stream" });
-    res.end(body);
-  } catch {
-    res.writeHead(404, { "content-type": "text/plain" });
-    res.end("not found");
-  }
-});
+    try {
+      const ext = extname(filePath);
+      let body = await readFile(filePath);
+      if (ext === ".html") {
+        body = Buffer.from(body.toString("utf8").split("__TERM__").join(TERM), "utf8");
+      }
+      res.writeHead(200, { "content-type": CONTENT_TYPES[ext] || "application/octet-stream" });
+      res.end(body);
+    } catch {
+      res.writeHead(404, { "content-type": "text/plain" });
+      res.end("not found");
+    }
+  });
+}
 
-server.listen(PORT, () => {
-  console.log(`Diskard demo site (filter term: "${TERM}") serving demo/ on port ${PORT}`);
-  console.log(`  front page: http://localhost:${PORT}/`);
-  console.log(`  cover page: http://localhost:${PORT}/full.html`);
-});
+// Run as `npm run demo`: serve on the default port and print both URLs.
+if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
+  createDemoServer().listen(DEFAULT_PORT, () => {
+    console.log(`Diskard demo site (filter term: "${TERM}") serving demo/ on port ${DEFAULT_PORT}`);
+    console.log(`  front page: http://localhost:${DEFAULT_PORT}/`);
+    console.log(`  cover page: http://localhost:${DEFAULT_PORT}/full.html`);
+  });
+}

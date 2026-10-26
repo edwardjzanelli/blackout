@@ -8,6 +8,7 @@
     "icons": "node scripts/icons.mjs",
     "build": "node scripts/build.mjs",
     "demo": "node scripts/demo.mjs",
+    "store-shots": "node scripts/store-shots.mjs",
     "live-check": "node scripts/live-check.mjs",
     "test": "npm run build && node --test test/"
   },
